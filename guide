@@ -1,0 +1,109 @@
+# pi-agent + OLAV skills — 使用说明
+
+这台机器上跑通的完整链路：pi-agent（Node.js CLI）+ OLAV 的 skill 包，用 DeepSeek 作为驱动模型。记录一下怎么用、以及两套不同用途的环境别搞混。
+
+## 1. 环境总览
+
+| 内容 | 路径 | 用途 |
+|---|---|---|
+| pi-agent 本体 | 装在 nvm 管理的 Node v24.20.0 下 | `pi` 命令 |
+| skill 发现目录 | `~/.pi/agent/skills/` | pi-agent 唯一会扫描的 skill 目录 |
+| `olav-skills` 包本体 | `~/olav-skills/` | 网络运维那 7 个 agent 的源（analyzer/importer/learner/netops/reporter/topology/writer） |
+| `olav-presales-skills` 包本体 | `~/olav-presales-skills/` | 售前那 6 个 agent 的源（analyst/designer/explorer/presales/publisher/surveyor） |
+| **纯查询环境**（无 embed 依赖，不能连真实设备） | 需要自己起一个 venv，`pip install -r <pack>/requirements-lean.txt && pip install <pack>/runtime` | 只能查已有的 duckdb 快照，不能采集 |
+| **完整采集环境**（能连真实设备） | `~/olav-live-collect/`（venv） | `pip install 'olav[agent]' 'olav-netops[device]'` 装的完整包，带 nornir/netmiko，能跑 collector skill 真连设备 |
+
+**关键区别**：两个发布包（`olav-skills`/`olav-presales-skills`）本身故意不带 `collector` 这类需要真连设备的 skill（README 里写明了原因：不想让"轻量包"绑定设备访问依赖）。想真的从网络设备上采数据，必须用 `~/olav-live-collect/` 这套完整安装，并且把 `collector` skill 手动同步进 `~/.pi/agent/skills/`（见下面第 4 节）。
+
+## 2. 启动 pi-agent
+
+```bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"   # 加载 nvm，让 node/npm/pi 在 PATH 里
+
+export DEEPSEEK_API_KEY="<key>"                   # 每次手动 export，不要写进 .bashrc/.profile 持久化
+                                                   # （之前踩过坑：key 写进 bashrc/bash_history/ipython history 被清理过一次）
+
+source ~/olav-live-collect/bin/activate           # 需要真实数据/采集时激活这个 venv
+cd ~/olav-live-collect                            # cwd 很重要——脚本靠相对路径找 .olav/ 配置和数据库
+
+pi --provider deepseek --print '<任务描述>'        # --print = 非交互，跑完直接退出；去掉 --print 是交互模式
+```
+
+`--provider deepseek` 对应 `DEEPSEEK_API_KEY`。pi-agent 默认 provider 是 `google`（对应 `GEMINI_API_KEY`），支持的 provider/环境变量对照表在：
+`~/.nvm/versions/node/v24.20.0/lib/node_modules/@earendil-works/pi-coding-agent/docs/providers.md`
+
+### 怎么把 API key 配进 pi-agent——两种方式，选哪个看场景
+
+**方式 A：环境变量，每次手动 export（本文档目前用的方式，推荐）**
+
+```bash
+export DEEPSEEK_API_KEY="<key>"
+pi --provider deepseek ...
+```
+
+- 优点：不落盘，进程退出就没了；这台机器之前吃过 key 被写进 `.bashrc`/`.bash_history`/ipython history 到处泄露的亏（见第 6 节），这种方式从根上避免再犯。
+- 缺点：每个新 shell 都要重新 export 一次，没法长期免输入。
+
+**方式 B：`/login` 交互式登录，持久化存到 `~/.pi/agent/auth.json`（官方支持的正式方式，但会落盘）**
+
+```bash
+pi                    # 不带 --print，进交互模式
+/login deepseek        # 选 "Use an API key"，粘贴 key 进去
+```
+
+- pi-agent 自己管理这个文件，`/logout` 可以清掉。存進去之后不用每次 export，`pi --provider deepseek` 直接能用。
+- **缺点很明确**：key 会以某种形式落在 `~/.pi/agent/auth.json` 这个文件里，长期躺着就是长期的泄露面——这正是这次清理要处理的那类问题。如果要用这个方式，至少确认这个文件权限是 600、且不会被误 `scp`/打包带出这台机器。
+- `pi auth check --provider deepseek` 可以查当前有没有存好凭据；`pi auth print-api-key --provider deepseek` 能把存的 key 打出来看（谨慎用，输出会包含明文 key）。
+
+**这份文档目前只用方式 A**，没有对这台机器跑 `/login` 存永久凭据——如果之后图省事想切到方式 B，务必想清楚落盘这件事本身要不要接受。
+
+## 3. 验证 skill 发现是否正常
+
+```bash
+pi --provider deepseek --print '列出你现在能看到的所有 skill 名字，每行一个，不要调用任何工具'
+```
+
+正常应该列出 `~/.pi/agent/skills/` 下的所有目录名（目前是两个包的 13 个 + 手动加的 `collector`）。
+
+## 4. 采集真实数据（走 `~/olav-live-collect`）
+
+`collector` skill（`take_snapshot`/`execute_cli_parallel`/`search_commands`）**不在**两个发布包里，采集前先同步一次（只需做一次，除非 `~/olav-live-collect` 的源码更新了）：
+
+```bash
+rsync -a ~/olav-live-collect/.olav/workspace/netops/collector/ ~/.pi/agent/skills/collector/
+```
+
+nornir 的设备清单/凭据在 `~/olav-live-collect/.olav/config/nornir/{hosts,groups,defaults}.yaml`（`defaults.yaml` 权限是 600，别提交到任何 git）。改设备清单直接编辑 `hosts.yaml`。
+
+驱动 pi-agent 去采集（让它自己规划、自己处理报错，不要自己手动跑 python 脚本）：
+
+```bash
+export DEEPSEEK_API_KEY="<key>"
+source ~/olav-live-collect/bin/activate
+cd ~/olav-live-collect
+pi --provider deepseek --print '用 collector skill 的 take_snapshot，从 nornir inventory 里的全部设备采集 <命令列表>。用当前激活的 venv 的 python 跑脚本，不要用系统 python3。如果遇到 netops.devices 表不存在的报错，去 olav_netops 包源码里找到正确的建表方式自己修，不用问我。最后告诉我哪些设备拿到了真实数据，哪些报错没能解决。'
+```
+
+**实测过的坑**（pi 上次自己也踩过、自己也修了，记录下来省得重复踩）：
+- 首次跑会报 `Table with name devices does not exist`——`netops.devices` 表要靠 `TableRegistry.ensure_all_schemas()`（`olav_netops.core.tables._register_all` + `olav.platform.ingest_base.TableRegistry`）先建表，`populate_devices()` 只管插数据不管建表。
+- 8 台设备并发采集容易撞 VTY 连接数上限，报 "Pattern not detected" / "TCP connection to device failed" 这类瞬时错误——降低 `max_workers`（比如从 8 降到 2）重跑就好，不是代码问题。
+- L2 access 交换机本来就不跑 BGP/OSPF，报 "unsupported command" 是正常的，不是 bug。
+
+## 5. 查数据 / 出报告（同样让 pi-agent 自己驱动）
+
+```bash
+pi --provider deepseek --print '用 reporter skill 调查 <网络范围> 当前的健康状况：设备清单、BGP、OSPF、CDP 拓扑，综合成结构化报告，通过 format_and_export 导出到 reports 目录，把导出路径和完整报告内容贴出来。'
+```
+
+导出文件落在 `<cwd>/exports/reports/<name>.md`（`format_and_export` 工具的固定行为）。**验证导出真的发生了，不要只信 pi 自己的文字汇报**：
+
+```bash
+ls -la ~/olav-live-collect/exports/reports/
+```
+
+## 6. 已知的当前限制
+
+- `~/.olav/config/api.json` 里的 `llm.api_key` 是空的（之前清过泄露的 key）——如果想让 OLAV 平台自己（不是通过 pi-agent）跑 LLM 相关功能，需要重新填一个 key。pi-agent 走的是自己的 `DEEPSEEK_API_KEY` 环境变量，跟这个文件无关。
+- embedding 相关的功能（`memory_recall`）在这个环境里全程不可用（没配 embedding 端点），日志里那些 `embed_text failed` 是预期噪音，不影响 SQL 查询/报告生成这条主链路。
+- `dual-campus` 那套 containerlab 拓扑的原始 `.clab.yml` 文件被清理时误删了（容器本身还在跑，只是以后 `containerlab destroy` 需要先重新写一份拓扑文件才能干净下线）。
