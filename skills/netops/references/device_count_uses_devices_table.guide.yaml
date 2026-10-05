@@ -1,0 +1,68 @@
+schema_version: 1
+intent: device_count_uses_devices_table
+agent: netops
+# Moved out of the platform wheel 2026-08-05: this is network-domain
+# knowledge, and CLAUDE.md forbids olav core carrying it. Declared core
+# before, which after the scope fix would have hidden it from the netops
+# agent entirely (dev_docs/117).
+keywords:
+  - how many devices
+  - device count
+  - number of devices
+  - what platforms
+  - fleet size
+  - just imported
+  - recently imported
+  - inventory count
+  - total devices
+  - 多少台设备
+  - 设备数量
+  - 设备总数
+  - 平台分布
+  - 刚导入
+body: |
+  Fleet size and platform mix come from netops.devices — not parsed_outputs
+
+  "How many devices" / "what platforms" / "how big is the fleet" are answered by
+  the device table, which has one row per device that was ingested:
+
+      SELECT count(*) FROM netops.devices;
+      SELECT platform, count(*) FROM netops.devices GROUP BY 1 ORDER BY 2 DESC;
+
+  ──────────────────────────────────────────────────────────────
+  Do NOT count devices out of the parsed/structured tables:
+
+      SELECT count(DISTINCT device_name) FROM netops.parsed_outputs;  -- ✗
+      SELECT count(*) FROM netops.devices WHERE model IS NOT NULL;    -- ✗
+      SELECT count(DISTINCT device_name) FROM netops.v_interfaces_auto; -- ✗
+
+  Those count "devices a parser could read", which is a SUBSET. On a real
+  339-device import they return 317 — the 22 devices whose command output no
+  parser matched are missing, and nothing in the number says so.
+  ──────────────────────────────────────────────────────────────
+
+  The three tables answer different questions:
+
+    netops.devices           one row per ingested device        ← fleet size
+    netops.raw_output_store  raw text per (device, command)     ← what was collected
+    netops.parsed_outputs    structured rows, parser-limited    ← what is queryable
+                                                                  as fields
+
+  So a device can be fully imported and still be absent from every `v_*_auto`
+  view. That is normal, not a gap in the import.
+
+  If the user asks specifically what is *queryable in structured form*, say both
+  numbers and label them — "339 devices imported, 317 with structured data" —
+  never one number without saying which it is.
+
+  Where the difference is explained: every ingest writes
+  `exports/import_reports/<snapshot_id>.md`, which names the devices with no
+  structured data and the reason each command output went unparsed. Cite it
+  instead of guessing why the two numbers differ.
+
+  Why this guide exists:
+    2026-08-05, mini-runsheet Ch2 (dev_docs/115 §8.4, dev_docs/116). Prompt:
+    "How many devices and what platforms did we just import?" The sub-agent
+    answered "Total Devices: 317" — it had queried parsed_outputs — while
+    netops.devices held 339. Real data, correct SQL, wrong table for the
+    question, and no hint to the audience that the number was a subset.

@@ -1,0 +1,115 @@
+schema_version: 2
+intent: netbox_csv_export
+agent: netops
+source_tier: platform
+keywords:
+- netbox
+- "netbox csv"
+- "netbox export"
+- "netbox import csv"
+- "netbox sync"
+- "export devices"
+- "device inventory export"
+- "netops to netbox"
+- "netbox-shaped csv"
+- dcim
+- inventory
+- csv
+body: |
+  ## NetBox device CSV export workflow
+
+  Goal: shape `netops.devices` data into a NetBox-import-compatible
+  CSV so the services agent (or an operator pasting into NetBox UI)
+  can push it without re-figuring the mapping each time.
+
+  ## Canonical SQL
+
+  ```sql
+  SELECT
+    d.hostname               AS name,
+    d.role                   AS device_role,
+    d.vendor                 AS manufacturer,
+    d.model                  AS device_type,
+    d.ip_address             AS primary_ip4,
+    d.platform               AS platform,
+    d.site                   AS site,
+    'active'                 AS status,
+    'acme-network-ops'       AS tenant,      -- per services/guides/netbox_tenant_default.guide.yaml
+    s.snapshot_id            AS snapshot_id,
+    strftime(NOW(), '%Y-%m-%dT%H:%M:%S%z') AS exported_at
+  FROM netops.devices d
+  CROSS JOIN (
+    SELECT snapshot_id
+    FROM netops.v_snapshots_auto
+    ORDER BY snapshot_id DESC
+    LIMIT 1
+  ) s
+  ORDER BY d.hostname;
+  ```
+
+  Column mapping rationale:
+
+  | OLAV column | NetBox column | Notes |
+  |---|---|---|
+  | `hostname` | `name` | NetBox device unique key |
+  | `role` | `device_role` | NetBox auto-creates if missing on import |
+  | `vendor` | `manufacturer` | Required for device_type FK |
+  | `model` | `device_type` | NetBox needs (manufacturer, model) pair |
+  | `ip_address` | `primary_ip4` | NetBox creates the IPAM row + links |
+  | `platform` | `platform` | Free text, vendor/OS combo |
+  | `site` | `site` | NetBox auto-creates if missing |
+  | — | `status` | Always `active` (constant) |
+  | — | `tenant` | From team-tier `netbox_tenant_default` guide |
+  | `v_snapshots_auto.snapshot_id` | `snapshot_id` | Watermark — which collect produced this row |
+  | NOW() | `exported_at` | When the CSV was generated |
+
+  ## Tool sequence
+
+  ```python
+  # Step 1: run the SQL above via execute_sql
+  result = execute_sql(sql="<the SQL>")
+
+  # Step 2: convert rows to CSV text and save via format_and_export
+  # The data parameter takes a JSON array string for format='csv'.
+  format_and_export(
+      data='<json.dumps of rows>',
+      format='csv',
+      filename='netbox_devices',          # → exports/netbox_devices.csv
+  )
+  ```
+
+  ## Verification (operator-facing)
+
+  ```bash
+  head -3 exports/netbox_devices.csv
+  # → header + 2 device rows; columns in the order above
+
+  awk -F, 'NR>1 {print $9}' exports/netbox_devices.csv | sort -u
+  # → only `acme-network-ops` (proves tenant guide is winning AutoRecall)
+
+  awk -F, 'NR>1 {print $10}' exports/netbox_devices.csv | sort -u
+  # → exactly one snapshot_id (the latest)
+  ```
+
+  ## Anti-patterns
+
+  - **Don't query `netops.parsed_outputs`** — that's per-command raw
+    parse output, not normalised device inventory.  `netops.devices`
+    is the canonical IPAM/DCIM-equivalent table.
+  - **Don't omit `snapshot_id`** — without it, multiple exports
+    overlay each other in NetBox imports with no way to tell which
+    collect produced which row.
+  - **Don't hardcode `tenant`** — read from the
+    `netbox_tenant_default` team-tier guide via AutoRecall, so org
+    changing tenant in Ch4 propagates here without a code edit.
+  - **Don't auto-push to NetBox from this guide** — that's the
+    services agent's responsibility (Ch10b path, deferred until
+    `netbox_csv_import` tool ships).  This guide only produces
+    the CSV; a human or a separate flow owns the push.
+
+  ## Output path
+
+  Always `exports/netbox_devices.csv` (format_and_export's default
+  subdir for `format='csv'`).  No subdirectory rotation — overwrites
+  on each export, since the canonical state is "the latest snapshot".
+  Git can capture the change history if `exports/` is tracked.

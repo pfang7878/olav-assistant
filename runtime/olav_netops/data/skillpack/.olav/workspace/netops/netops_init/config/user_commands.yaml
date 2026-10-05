@@ -1,0 +1,51 @@
+# Per-platform commands to collect even though no parser exists.
+#
+# These go into `netops.commands` with `parser_type='raw_only'` and
+# `backup_only=true`. Output ends up in `raw_output_store` only; views
+# won't reference them because there is no parser producing JSON.
+#
+# Typical use: full device configuration backups (running-config,
+# startup-config, diff targets). The agent can still query these via
+# raw fallback (Tier 3) when the user asks "what's R2's config?".
+#
+# Users can override/extend by writing their own ``~/.olav/config/user_commands.yaml``
+# with the same schema; the workspace default (this file) is loaded
+# first, the user copy overlays last.
+
+commands:
+  cisco_ios:
+    - show running-config
+    - show startup-config
+
+  cisco_xe:
+    - show running-config
+    - show startup-config
+
+  cisco_xr:
+    - show running-config
+    - show running-config formal
+
+  cisco_nxos:
+    - show running-config
+    - show startup-config
+
+  arista_eos:
+    - show running-config
+    - show startup-config
+
+  juniper_junos:
+    - show configuration
+    - show configuration | display set
+
+  nokia_sros:
+    - admin display-config
+
+  huawei_vrp:
+    - display current-configuration
+    - display saved-configuration
+
+  paloalto_panos:
+    - show config running
+
+  fortinet_fortios:
+    - show full-configuration

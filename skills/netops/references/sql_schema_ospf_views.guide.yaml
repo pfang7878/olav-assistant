@@ -1,0 +1,55 @@
+schema_version: 2
+intent: sql_schema_ospf_views
+agent: netops
+source_tier: platform
+keywords:
+- ospf
+- ospf neighbor
+- ospf adjacency
+- ospf area
+- show ip ospf
+- init
+- exstart
+- two-way
+- full
+- dr
+- bdr
+body: |
+  ## OLAV OSPF view schemas
+
+  ### `netops.v_show_ip_ospf_neighbor_auto`
+  ```
+  device_name, snapshot_id, neighbor_id, priority, state, dead_time,
+  ip_address, interface
+  ```
+  - **OSPF state column is just `state`** (different from BGP which uses `bgp_state`).
+  - `neighbor_id` = router-id of the OSPF peer.
+  - `interface` = local interface name (e.g. `Ethernet0/1`, `ge-0/0/1`).
+
+  ## Example queries
+
+  ```sql
+  -- OSPF neighbors on R3
+  SELECT neighbor_id, state, ip_address, interface, dead_time
+  FROM netops.v_show_ip_ospf_neighbor_auto
+  WHERE device_name = 'R3';
+
+  -- Adjacencies stuck in Init / ExStart (area or MTU mismatch)
+  SELECT device_name, interface, neighbor_id, state
+  FROM netops.v_show_ip_ospf_neighbor_auto
+  WHERE state IN ('INIT', 'EXSTART', 'EXCHANGE');
+
+  -- Per-device adjacency count
+  SELECT device_name, COUNT(*) AS adjacencies,
+         SUM(CASE WHEN state = 'FULL' THEN 1 ELSE 0 END) AS full_count
+  FROM netops.v_show_ip_ospf_neighbor_auto
+  GROUP BY device_name;
+  ```
+
+  ## Notes
+
+  - State values are uppercase strings: `INIT`, `2WAY`, `EXSTART`,
+    `EXCHANGE`, `LOADING`, `FULL`. Filter with `= 'FULL'` not
+    `= 'full'`.
+  - Area is NOT in this view; if needed pull via raw config
+    (`netops.raw_output_store WHERE command = 'show running-config'`).

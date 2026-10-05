@@ -1,0 +1,7 @@
+# L2 topology view — projects directly from netops.topology_links (already
+# materialized by the CDP/LLDP ETL during ingest). The '@topology_links'
+# command is a special directive handled by view_builder.build_l2_view.
+- command: "@topology_links"
+  concept: topology_l2
+  vendor_hint: universal
+  field_mappings: {}

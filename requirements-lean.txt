@@ -1,0 +1,9 @@
+# What this pack imports, and nothing else. See README § Install (lean).
+duckdb>=0.8.0
+pyyaml>=6.0
+pydantic>=2.0
+textfsm>=2.1.0
+ntc-templates>=9.1.0
+networkx>=3.6.1
+netutils>=1.17.1
+netconan>=0.13

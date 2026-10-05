@@ -1,0 +1,66 @@
+schema_version: 1
+intent: rancid_format
+agent: netops
+keywords:
+  - rancid
+  - oxidized
+  - solarwinds NCM
+  - git backup
+  - network backup
+priority: 2
+body: |
+  ## Rancid layout (Phase 4 — not yet ingested)
+
+  rancid stores per-device configs as flat files in a CVS or git repo::
+
+      <router-db-group>/
+      ├── configs/
+      │   ├── router1                   ← single file per device
+      │   ├── router2
+      │   └── ...
+      ├── router.db                     ← inventory (one line per device)
+      └── ...
+
+  Each `configs/<host>` file is a **concatenation** of multi-command
+  output separated by `!`-banner markers, e.g.:
+
+      !RANCID-CONTENT-TYPE: cisco
+      !
+      !Chassis type: WS-C3850-48P
+      !
+      !Hardware
+      !
+      ...
+      !
+      !Running-config
+      !
+      Building configuration...
+      version 15.2
+      ...
+      !End
+
+  ## Phase 4 adapter design
+
+  When implemented, the rancid adapter will:
+
+  1. Detect rancid layout via the `!RANCID-CONTENT-TYPE:` marker and
+     `router.db` inventory file at the root.
+  2. Parse `router.db` for the (hostname, vendor, mgmt_ip) triple per
+     device.
+  3. Split each `configs/<host>` on `^!<command_name>$` banners into
+     per-command sections.
+  4. Map rancid vendor strings (`cisco`, `juniper`, `arista`) to OLAV
+     platform keys (`cisco_ios`, `juniper_junos`, `arista_eos`).
+  5. Emit an in-memory canonical bundle and feed it to
+     `ingest_snapshot`.
+
+  ## Today
+
+  This format is NOT YET supported. Report to the user:
+
+      Format detected: rancid configs/ tree (X hosts)
+      This format is not yet supported (Phase 4 of dev_docs/80).
+      Workarounds:
+        - Re-collect via olav-collector (when available), or
+        - Manual bundle conversion using
+          scripts/build_portable_ingest_fixture.py as a template.

@@ -1,0 +1,133 @@
+schema_version: 1
+intent: plan_act_reflect_workflow
+agent: netops
+keywords:
+  - deep research
+  - comprehensive report
+  - investigate and report
+  - multi-step analysis
+  - audit and write report
+  - thorough investigation
+  - deep research
+  - comprehensive report
+  - multi-step analysis
+  - write report
+  - research and output
+  - end-to-end audit
+  - holistic review
+  - long-form analysis
+body: |
+  # Plan-Act-Reflect Workflow (generic)
+
+  Use this workflow for ANY complex task whose output is a substantive
+  report / artifact (markdown, audit summary, deep analysis), where the
+  work needs multiple data-gathering steps + synthesis + judgment.
+
+  This is NOT for simple lookups ("show me R1's interfaces") nor for
+  structured change plans (which use analyzer Workflow A — see ``analyzer/prompts/system.md``).
+
+  ## Phase 1 — PLAN (always first, before any data tool call)
+
+  Use `write_todos` to commit a stage plan with 3-6 stages, each one
+  having (a) a goal, (b) which tools/sub-agents you'll call, (c) the
+  artifact it produces.
+
+  Example plan for "investigate iBGP mesh health and write report":
+
+  ```
+  - stage1_scope:   define what counts as iBGP in this network →
+                    artifact: list of (device, peer) pairs
+                    tools: task("analyze", "list iBGP sessions")
+  - stage2_state:   collect current session state →
+                    artifact: per-pair Established/Idle + prefix counts
+                    tools: task("analyze", "BGP summary per device")
+  - stage3_evidence: pull syslog for any session flaps →
+                    artifact: timeline of flap events
+                    tools: task("analyzer", "query_evidence BGP flap events last 7d")
+  - stage4_synthesis: derive hypothesis + risk list
+                    artifact: structured findings
+                    tools: (LLM reasoning only, no tools)
+  - stage5_report: emit MD report
+                    artifact: exports/reports/<topic>.md
+                    tools: task("writer", "format_and_export")
+  ```
+
+  Rules:
+  - Each stage produces a NAMED ARTIFACT. Don't leave stages vague.
+  - Stage 5 (or last) is always "emit report / artifact".
+  - If you cannot name the artifact, the stage is not concrete enough.
+
+  ## Phase 2 — ACT (execute one stage at a time)
+
+  After write_todos, do this loop for each stage:
+  1. Mark stage `in_progress` via write_todos
+  2. Make the tool calls / sub-agent dispatches the stage requires
+  3. Mark stage `completed` ONLY when the artifact is in your context
+
+  Rules:
+  - Do NOT skip ahead to a later stage if the current one didn't produce
+    its artifact.  Re-try or down-scope the stage.
+  - Do NOT bundle 2-3 stages' tool calls into one mega-action. One stage
+    at a time keeps reflection meaningful.
+
+  ## Phase 3 — REFLECT (after each stage, BEFORE marking it completed)
+
+  Ask yourself, briefly:
+  - Did I get the artifact this stage was supposed to produce?
+  - Is the artifact concrete (real data) vs hand-wavy summary?
+  - Is anything missing that the next stages will depend on?
+  - Should I re-do this stage with different tools / scope?
+
+  If the answer to "missing or hand-wavy" is yes, **add a remediation
+  step before moving on** (e.g. "stage2b: re-query X with finer
+  filter").
+
+  ## Phase 4 — ITERATE TO QUALITY BAR (before emitting final report)
+
+  After all stages done, before writing the report:
+  - Does each section have grounded facts (with device/timestamp/value)?
+  - Are recommendations tied to specific evidence?
+  - Are there obvious gaps a reviewer would notice?
+
+  If yes to gaps → spawn a remediation stage, re-do, then write report.
+
+  ## Phase 5 — EMIT REPORT (final stage)
+
+  Use `task("writer", "format_and_export ...")` to materialize the
+  artifact to `exports/reports/<topic>_<YYYY-MM-DD>.md`.  Report
+  structure:
+
+  ```
+  # <Topic>
+  _Generated YYYY-MM-DD; data window: ...; sources: <SQL views, sub-agents used>_
+
+  ## Executive Summary
+  3-5 bullets max. Top findings + top risks.
+
+  ## Scope & Method
+  What was investigated. Which sub-agents/tools called.
+
+  ## Findings
+  Per finding: claim + evidence (device, value, source).
+
+  ## Risks & Recommendations
+  Per item: severity, recommended action, affected devices.
+
+  ## Appendix: raw evidence table
+  ```
+
+  ## What NOT to do
+
+  - Write the report before any stages have produced artifacts.
+  - Bundle all work into one giant action without stage breakdown.
+  - Mark stages completed when you only have a "summary" not the
+    actual artifact.
+  - Skip reflection because "it's obvious" — reflection catches
+    silently-missing data 30% of the time.
+
+  ## Why this workflow
+
+  Reports written without staged planning tend to: (1) hallucinate
+  data not actually queried, (2) skip evidence collection, (3)
+  produce "looks plausible" prose disconnected from real device
+  state.  Plan-Act-Reflect forces grounded outputs.

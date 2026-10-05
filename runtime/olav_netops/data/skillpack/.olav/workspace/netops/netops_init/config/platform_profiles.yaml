@@ -1,0 +1,63 @@
+# Platform profiles — per-platform metadata for Device ETL + Scrapli fast path.
+#
+# Nornir's hosts.yaml is the authoritative source for:
+#   * hostname / management IP  — do NOT re-extract from CLI output
+#   * platform string            — trusted verbatim, no show-version override
+#
+# This file only carries the *optional enrichment* needed once `show version`
+# is parsed: which fields in the TextFSM/ntc-templates output carry the
+# model string and OS version string. Unknown platforms keep model/os_version
+# NULL until a profile is added here (or auto-learned via the topology skill).
+#
+# Schema per platform:
+#   vendor               Display name written to netops.devices.vendor
+#   scrapli_platform     Optional Nornir→Scrapli translation (omit = no fast path)
+#   model_fields         Ordered candidate keys in show-version parse for model
+#   os_version_fields    Ordered candidate keys for OS version string
+
+platforms:
+  cisco_ios:
+    vendor: Cisco
+    scrapli_platform: cisco_iosxe
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION, ROMMON, SOFTWARE_IMAGE]
+
+  cisco_xe:
+    vendor: Cisco
+    scrapli_platform: cisco_iosxe
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION, ROMMON, SOFTWARE_IMAGE]
+
+  cisco_xr:
+    vendor: Cisco
+    scrapli_platform: cisco_iosxr
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION, SOFTWARE_IMAGE]
+
+  cisco_nxos:
+    vendor: Cisco
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION, SOFTWARE_IMAGE]
+
+  juniper_junos:
+    vendor: Juniper
+    scrapli_platform: juniper_junos
+    model_fields: [MODEL]
+    os_version_fields: [JUNOS_VERSION]
+
+  arista_eos:
+    vendor: Arista
+    scrapli_platform: arista_eos
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION, SOFTWARE_IMAGE]
+
+  huawei_vrp:
+    vendor: Huawei
+    model_fields: [MODEL, HARDWARE]
+    os_version_fields: [VERSION]
+
+  nokia_sros:
+    vendor: Nokia
+    scrapli_platform: nokia_sros
+    model_fields: [CHASSIS_MODEL, MODEL]
+    os_version_fields: [TIMOS_VERSION, VERSION]

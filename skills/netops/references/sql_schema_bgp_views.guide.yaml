@@ -1,0 +1,71 @@
+schema_version: 2
+intent: sql_schema_bgp_views
+agent: netops
+source_tier: platform
+keywords:
+- bgp
+- neighbors
+- sessions
+- peers
+- established
+- idle
+- active
+- bgp state
+- bgp neighbor
+- show bgp
+- show ip bgp
+body: |
+  ## OLAV BGP view schemas (exact column names — do not guess)
+
+  Three BGP views exist; pick by what you need.
+
+  ### `netops.v_show_ip_bgp_neighbors_auto`  — per-neighbor detail
+  ```
+  device_name, snapshot_id, neighbor, vrf, remote_as, peer_group,
+  remote_router_id, bgp_state, localhost_ip, localhost_port,
+  remote_ip, remote_port, inbound_routemap, outbound_routemap
+  ```
+  - **The state column is `bgp_state` — NOT `state`, NOT `session_state`.**
+  - No `prefixes_received` column — use `v_show_ip_bgp_summary_auto.state_or_prefixes_received`.
+
+  ### `netops.v_show_ip_bgp_summary_auto`  — Cisco IOS-style summary
+  ```
+  device_name, snapshot_id, router_id, local_as, address_family,
+  bgp_neighbor, bgp_version, neighbor_as, messages_received,
+  messages_sent, table_version, input_queue, output_queue,
+  up_down, state_or_prefixes_received
+  ```
+  - `state_or_prefixes_received` carries either a state string OR a
+    numeric prefix count — that's the Cisco quirk we preserve.
+
+  ### `netops.v_show_bgp_summary_auto`  — Junos-style summary
+  ```
+  device_name, snapshot_id, peer, peer_as, inpkt, outpkt, outq,
+  flaps, uptime, state
+  ```
+
+  ## Example queries
+
+  ```sql
+  -- BGP neighbors on R1
+  SELECT neighbor, bgp_state, remote_as, vrf
+  FROM netops.v_show_ip_bgp_neighbors_auto
+  WHERE device_name = 'R1';
+
+  -- Sessions not Established
+  SELECT device_name, neighbor, bgp_state, remote_as
+  FROM netops.v_show_ip_bgp_neighbors_auto
+  WHERE bgp_state != 'Established';
+
+  -- Cross-device BGP summary
+  SELECT device_name, router_id, local_as, COUNT(*) AS sessions
+  FROM netops.v_show_ip_bgp_summary_auto
+  GROUP BY device_name, router_id, local_as;
+  ```
+
+  ## Common mistakes the schema rejects
+
+  - `SELECT state FROM v_show_ip_bgp_neighbors_auto` — column is `bgp_state`
+  - `SELECT prefixes_received FROM ...` — not a column on neighbors view
+  - `SELECT device FROM ...` — column is `device_name` everywhere
+  - Forgetting `netops.` schema prefix — required.

@@ -1,0 +1,147 @@
+# Business Source License 1.1
+
+**Parameters**
+
+* **Version:** 0.10.0
+* **Last Updated:** 2026-03-06
+* **Licensor:** DATATECHIE PTY LTD
+* **Registered Address:** Footscray, VIC 3011, Australia
+* **Copyright:** Copyright © 2024-2026 DATATECHIE PTY LTD. All rights reserved.
+* **Software:** olav (including all core orchestration logic, agent skills, and middleware)
+* **Change Date:** 2030-01-01
+* **Change License:** Apache License, Version 2.0
+* **Additional Use Grant:** See section "Additional Use Grant" below.
+* **Partner Program:** Commercial licensing details at [olavai.com/partners](https://olavai.com/partners) (TBA).
+
+---
+
+## 1. The License Text
+
+The Licensor hereby grants you the right to copy, modify, create derivative works, redistribute, and make non-production use of the Software.
+
+**Production use** is allowed ONLY under the conditions specified in the **Additional Use Grant** below.
+
+Any use of the Software in production for purposes not explicitly permitted by the Additional Use Grant requires a separate commercial license as part of the **olav Partner Program**.
+
+---
+
+## 2. Additional Use Grant
+
+You are authorized to use the Software in a production environment under the following conditions:
+
+### A. Internal Expert Use (Free)
+
+1. **Personal Use:** You may use the Software for personal, non-commercial research and experimentation.
+2. **Internal Enterprise Use:** Organizations may use the Software for their **own internal infrastructure management**, provided that:
+* The Software is used to manage infrastructure **owned or leased by that organization**.
+* The use is not intended to provide services to any third party.
+* Contractors, consultants, and part-time staff acting **on behalf of and under the direction of** the organization are permitted to operate the Software for that organization's internal use.
+
+
+
+### B. Prohibited Commercial Use (Partner License Required)
+
+The following use cases are **EXPRESSLY PROHIBITED** under this Free Grant and require joining the **olav Partner Program**:
+
+* **Managed Service Providers (MSP):** Using olav to manage, monitor, or operate infrastructure belonging to third-party clients.
+* **Cloud Service Providers (CSP):** Offering olav as a hosted service, managed instance, or via an API to external customers.
+* **Outsourced Operations:** A third-party firm using the Software to manage **another organization's** infrastructure as a commercial service (note: contractors working under the direction of the infrastructure owner for internal use are permitted under §A.2).
+* **Bundling & Resale:** Packaging olav within a commercial product, hardware appliance, or proprietary software suite.
+* **Commercial Consulting:** Selling "olav Implementation" or "Expert Skill Tuning" as a paid service to third parties.
+
+---
+
+## 3. Vision & Philosophy
+
+The licensing model of **olav** reflects our core architectural values:
+
+* **Empowerment over Displacement:** olav is designed to liberate engineers from trivial, repetitive tasks, not to serve as an interface for cutting professional labor costs.
+* **Robustness over Cost:** We believe expertise is the only true firewall. By restricting use to direct employees or certified partners, we ensure that critical infrastructure is managed by those with the skin in the game and the necessary domain depth.
+* **Professional Respect:** We prioritize the technical sovereignty of the individual architect. If you are a professional making your own network more robust, this tool is yours. If you are a corporation seeking to arbitrage professional knowledge through cheap labor, you must contribute back to the ecosystem.
+
+---
+
+## 4. Partner Program & Licensing
+
+Organizations that fall under the "Prohibited Commercial Use" category must obtain a **Commercial Partner License**. Benefits include:
+
+* Legal right to resell/package olav-based services.
+* Direct architectural support and audit trails for compliance.
+
+For inquiries, contact: **james@olavai.com**
+
+---
+
+## 5. Change License
+
+On the **Change Date (2030-01-01)**, this license will automatically convert to the **Apache License, Version 2.0**. This ensures the long-term openness of the core framework while protecting the initial phase of expert-led innovation.
+
+---
+
+## 6. Disclaimer & Limitation of Liability
+
+### AS-IS Provision
+
+**THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND**, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+DATATECHIE PTY LTD makes no representations or warranties regarding:
+* The accuracy, completeness, or reliability of the Software
+* The suitability of the Software for any particular purpose
+* The absence of errors, defects, or malicious code
+* The uninterrupted or error-free operation of the Software
+
+### AI-Generated Output Notice
+
+The Software uses large language models (LLMs) to generate responses, tool calls, and operational recommendations. **AI-generated outputs are non-deterministic and may contain errors.** Users must:
+
+* **Review all AI-generated actions** before applying them to production infrastructure
+* **Not rely solely on AI outputs** for critical infrastructure decisions without human verification
+* Understand that the Software's Agent Harness provides safety layers (HITL approval, sandbox isolation, read-only enforcement) but **cannot guarantee the correctness of LLM-generated content**
+
+### User's Responsibility
+
+By downloading, installing, or using the Software, you acknowledge and accept responsibility for:
+
+* Reviewing and approving all actions the Software takes in your infrastructure
+* All data processed, modified, or deleted by the Software
+* Configuration errors that may result in unintended network changes
+* Security vulnerabilities you may fail to patch
+* Compliance with local regulations in your jurisdiction
+
+### Limitation of Liability
+
+**TO THE MAXIMUM EXTENT PERMITTED BY LAW**, DATATECHIE PTY LTD SHALL NOT BE LIABLE FOR ANY OF THE FOLLOWING, WHETHER BASED ON WARRANTY, CONTRACT, TORT, STRICT LIABILITY, OR ANY OTHER LEGAL THEORY:
+
+* **Indirect Damages:** Loss of profits, revenue, data, goodwill, or business opportunity
+* **Special/Consequential Damages:** Damages arising from network downtime, unauthorized access, or third-party claims
+* **Direct Damages Cap:** The total liability of DATATECHIE PTY LTD shall not exceed the amount paid for the license (if Partner tier), or zero dollars (if Free Grant users)
+
+This limitation applies even if DATATECHIE PTY LTD has been advised of the possibility of such damages.
+
+### Indemnification
+
+Users using the Software shall **indemnify and hold harmless** DATATECHIE PTY LTD, its officers, employees, and partners from any third-party claims, damages, or costs (including legal fees) arising from:
+* User's use of the Software
+* User's breach of this License
+* User's negligence or misuse of the Software
+* User's unauthorized modification or redistribution
+
+### Acceptance of Terms
+
+**Use of the Software constitutes acceptance of this entire License.** You agree that:
+* You have read and understood all terms
+* You assume all risks of using the Software
+* You will not hold DATATECHIE PTY LTD liable for any damages
+* DATATECHIE PTY LTD is not liable for third-party claims against you
+
+If you do not accept these terms, **you must cease use of the Software immediately and delete all copies**.
+
+---
+
+## 7. Governing Law & Jurisdiction
+
+This License shall be governed by and construed in accordance with the laws of **Victoria, Australia**, without regard to its conflict of laws principles.
+
+* **Jurisdiction:** Exclusive jurisdiction for any disputes lies with the courts of Victoria, Australia
+* **Dispute Resolution:** Before initiating legal proceedings, parties agree to attempt good-faith negotiation
+* **Attorney's Fees:** The prevailing party in any legal proceeding shall be entitled to recover reasonable attorney's fees and costs

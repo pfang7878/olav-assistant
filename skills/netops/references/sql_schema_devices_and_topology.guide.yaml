@@ -1,0 +1,79 @@
+schema_version: 2
+intent: sql_schema_devices_and_topology
+agent: netops
+source_tier: platform
+keywords:
+- device
+- devices
+- inventory
+- border router
+- core router
+- access switch
+- role
+- platform
+- vendor
+- topology
+- links
+- lldp
+- cdp
+- show lldp
+- show cdp
+body: |
+  ## OLAV inventory + topology schemas
+
+  ### `netops.devices`  — device inventory (one row per device)
+  ```
+  hostname, ip_address, platform, site, role, vendor, model,
+  os_version, environment, last_seen, metadata
+  ```
+  - **Identifier column is `hostname` (NOT `device_name`).**
+    Other operational views all use `device_name` — this is the
+    exception. The two are equivalent (`hostname == device_name`).
+  - `role` values: `border`, `core`, `access` (free text — case-sensitive
+    as written by nornir inventory).
+  - `platform`: `cisco_ios`, `juniper_junos`, `arista_eos`, etc.
+
+  ### `netops.topology_links`  — L2 adjacencies from LLDP/CDP
+  ```
+  link_id, source_device, source_interface, destination_device,
+  destination_interface, discovery_protocol, link_type,
+  link_status, link_speed, first_seen, last_seen, last_verified,
+  status_changes, snapshot_id, platform
+  ```
+
+  ### `netops.v_l2_links_auto`  — simplified live view
+  ```
+  source_device, source_interface, destination_device,
+  destination_interface, discovery_protocol, link_status, snapshot_id
+  ```
+
+  ## Example queries
+
+  ```sql
+  -- Border routers
+  SELECT hostname, ip_address, platform, vendor
+  FROM netops.devices
+  WHERE role = 'border';
+
+  -- Device count
+  SELECT COUNT(*) AS total FROM netops.devices;
+
+  -- L2 topology (Mermaid-ready)
+  SELECT source_device, source_interface,
+         destination_device, destination_interface, link_status
+  FROM netops.v_l2_links_auto
+  ORDER BY source_device;
+
+  -- Devices last seen > 24 h ago
+  SELECT hostname, last_seen
+  FROM netops.devices
+  WHERE last_seen < NOW() - INTERVAL '24 hours';
+  ```
+
+  ## Common mistakes
+
+  - `SELECT device_name FROM netops.devices` — column is `hostname`.
+  - `SELECT device FROM ...` — full column is `hostname` or
+    `device_name` depending on the table.
+  - Querying `netops.topology_links` and assuming you'll see live
+    state — use the `_auto` view for current snapshot.

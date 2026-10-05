@@ -1,0 +1,11 @@
+# BGP neighbors — Arista EOS (ntc-templates schema).
+- command: show ip bgp summary
+  concept: bgp_neighbors
+  vendor_hint: arista_eos
+  field_mappings:
+    neighbor_ip: neighbor_ip
+    neighbor_as: neighbor_as
+    local_as: local_as
+    router_id: router_id
+    state: state_pfxrcd
+    uptime: up_down

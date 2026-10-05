@@ -1,0 +1,11 @@
+# OSPF adjacencies — Cisco IOS. Note ntc-templates emits UPPERCASE fields;
+# view_builder tolerates case via _json_extract's COALESCE(lower, UPPER).
+- command: show ip ospf neighbor
+  concept: ospf_neighbors
+  vendor_hint: cisco_ios
+  field_mappings:
+    neighbor_id: neighbor_id
+    neighbor_ip: address
+    interface: interface
+    state: state
+    dead_time: dead_time

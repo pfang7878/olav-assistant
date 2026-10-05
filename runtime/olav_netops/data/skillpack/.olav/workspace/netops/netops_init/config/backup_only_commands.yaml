@@ -1,0 +1,69 @@
+# backup_only_commands.yaml
+# Commands that are executed ONLY during snapshots (scheduled backups).
+#
+# These commands generate verbose/heavy outputs suitable for periodic archival
+# but not suitable for interactive queries (e.g., show tech-support, show logging).
+#
+# Execution behavior:
+#   - During take_snapshot(): INCLUDED (backup mode)
+#   - During quick-Query: EXCLUDED (query mode)
+#
+# Distinction from blacklisted_commands.yaml:
+#   - blacklisted: Never executed (safety-critical writes like "write memory")
+#   - backup_only: Executed but only in snapshots (resource-heavy reads)
+#
+# type field:
+#   - configuration: Full running-config of the device. Used as the source for
+#                    config diff (diff_engine). platforms field restricts which
+#                    vendors this command applies to (optional, informational).
+#   - other: Heavy/verbose operational outputs. Archived only, not diffed.
+#
+# Format: {command: ..., type: configuration|other, platforms: [...]}
+
+# ── configuration commands ──────────────────────────────────────────────────
+# These are the PRIMARY targets for config diff. diff_engine reads type=configuration
+# to determine which commands to compare across snapshots.
+
+- command: show running-config
+  type: configuration
+  platforms: [cisco_ios, cisco_nxos, cisco_iosxe, cisco_iosxr]
+
+- command: display current-configuration
+  type: configuration
+  platforms: [huawei_vrp]
+
+- command: show configuration
+  type: configuration
+  platforms: [juniper_junos, paloalto_panos, arista_eos]
+
+- command: show running-config all
+  type: configuration
+  platforms: [cisco_asa]
+
+# ── other: verbose operational outputs (archive only, not diffed) ───────────
+
+- command: show logging
+  type: other
+
+# Detailed neighbor information (exhaustive protocol-specific data)
+- command: show ip bgp neighbors
+  type: other
+
+# Comprehensive interface statistics (verbose output, many lines)
+- command: show interface statistics
+  type: other
+
+# Detailed route summaries (can be lengthy, especially in large routing tables)
+- command: show ip route summary
+  type: other
+
+# Hardware/resource diagnostics (verbose, system-impacting)
+- command: show memory statistics
+  type: other
+
+- command: show processes cpu
+  type: other
+
+# Extended ACL details (verbose if many entries)
+- command: show access-lists detailed
+  type: other

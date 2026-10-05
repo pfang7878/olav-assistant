@@ -1,0 +1,65 @@
+schema_version: 1
+intent: save_artifact
+agent: netops
+# 2026-08-05: was 'agent: ops', which matches no real workspace — the
+# scope filter would never have matched it once agent started governing
+# recall (dev_docs/117).
+keywords:
+  - save
+  - export
+  - write to disk
+  - write file
+  - exports/
+  - .mmd
+  - .md
+  - .csv
+  - .json
+  - save
+  - export
+  - write file
+body: |
+  Any request to "save", "export", "write to disk", or to land an
+  artefact under exports/ — call ``format_and_export`` directly.
+  After R85 it's a shared core tool; no cross-agent delegation
+  required.
+
+  Steps:
+
+  1. Produce the data (SQL result, Mermaid string, report Markdown,
+     simulation JSON, etc.).
+
+  2. Call format_and_export with the right shape:
+       format_and_export(
+           data=<the data>,
+           format='<ext>',         # mmd, md, csv, json, yaml, sh
+           subdir='<subdir>',      # diagrams, reports, scripts, ...
+                                   # optional — auto-routed by format
+           filename='<name>'       # optional — auto-generated if omitted
+       )
+
+  3. Returns ``{"path": "exports/<subdir>/<file>.<ext>", "size": N}``.
+     Cite ``result["path"]`` verbatim.
+
+  Format-tag → recall mapping (the tagged ``format_*`` memory entry
+  auto-surfaces with the matching layout rules):
+
+  - topology diagram (Mermaid) → see ``format_topology_diagram`` memory
+  - generic query result (CSV)  → see ``format_query_result`` memory
+  - audit / narrative report     → see ``format_audit_report`` memory
+  - drift / diff comparison      → see ``format_diff_report`` memory
+
+  ⚠️ NEVER write "Saved to /exports/foo.X" without having called
+  format_and_export.  SaveAssertionMiddleware catches the
+  hallucination but recovery is best-effort — direct call is
+  preferred.
+
+  ⚠️ The ``writer`` subagent still exists as the polish/edit
+  agent — invoke it ONLY when the user says "polish this report"
+  or "improve the wording" on an already-saved file.  It is no
+  longer the file-write bottleneck.
+
+related:
+  - intent: topology_visualization
+    note: "uses format='mmd' subdir='diagrams'"
+  - intent: simulation_what_if
+    note: "uses format='md' subdir='reports' for the narrative"

@@ -1,0 +1,83 @@
+schema_version: 1
+intent: platform_signatures_tier3_fallback
+agent: netops
+keywords:
+  - platform discovery
+  - vendor signature
+  - prompt heuristic
+  - banner classification
+  - tier 3 fallback
+  - show running-config
+  - platform identification
+  - vendor identification
+priority: 4
+body: |
+  ## Tier 3 LLM platform-classification table
+
+  Reach for this only after ``discover_platform_for_host`` returns
+  ``confidence == "unknown"``.  At that point the Python cascade has
+  already tried TextFSM against show_version / show_platform /
+  show_inventory / show_chassis hardware for all 7 vendor candidates —
+  none matched, so visual signals are the last lever.
+
+  Read the ``sample_file`` it returned (typically show_running-config or
+  show_logging — whatever the bundle actually contains).  Look for these
+  signals **in priority order**:
+
+  ## Prompt / banner table
+
+  | Signal in the file                                               | platform key       | vendor   |
+  |------------------------------------------------------------------|--------------------|----------|
+  | ``Cisco IOS Software``, ``Cisco IOS XE Software``, prompt ``R1#``| ``cisco_ios``      | Cisco    |
+  | ``RP/0/RSP0/CPU0:router#``, ``Cisco IOS-XR``, ``IOS XR Software``| ``cisco_xr``       | Cisco    |
+  | ``NX-OS``, ``Nexus Operating System``, prompt ``switch#``        | ``cisco_nxos``     | Cisco    |
+  | ``Cisco Adaptive Security Appliance``, prompt ``ciscoasa#``      | ``cisco_asa``      | Cisco    |
+  | ``JUNOS``, prompt ``user@host>`` / ``user@host#``                | ``juniper_junos``  | Juniper  |
+  | ``Arista DCS-`` model line, ``Arista EOS``                       | ``arista_eos``     | Arista   |
+  | ``*A:router#``, ``Nokia 7750 SR``, ``TiMOS``                     | ``nokia_sros``     | Nokia    |
+  | ``<HUAWEI>``, ``[HUAWEI]``, ``Huawei Versatile Routing Platform``| ``huawei_vrp``     | Huawei   |
+
+  ## Decision rules
+
+  1. **Multiple signals** — if you see *both* ``R1#`` prompt and
+     ``Cisco IOS XE Software`` banner, pick ``cisco_ios`` (IOS-XE
+     devices are parsed via ntc-templates' cisco_ios family — there is
+     no separate cisco_xe template set).
+  2. **Conflicting signals across files** — if show_logging hints at
+     Cisco but show_running-config starts with ``set system host-name``,
+     it's Junos in a translation layer; pick juniper_junos.
+  3. **No clear signal** — leave ``platform`` out of the
+     ``host_platforms`` map.  Ingest will tag the host as ``unknown``
+     and downstream views just skip those rows; this is correct
+     behaviour for a true "unknown vendor" device.
+
+  ## Worked example
+
+  ```
+  discover_platform_for_host("/tmp/bundle/devices/R-EDGE-42")
+  → {"confidence": "unknown",
+     "sample_file": "/tmp/bundle/devices/R-EDGE-42/show_running-config.txt",
+     "sample_command": "show running-config"}
+
+  read_file("/tmp/bundle/devices/R-EDGE-42/show_running-config.txt", limit=50)
+  →
+  ! Last configuration change at 03:14:15 UTC Thu Feb 15 2026 by admin
+  version 17.9
+  ...
+  hostname R-EDGE-42
+  ...
+
+  → Signal: ``version 17.9`` + IOS-style ``hostname`` directive
+    → platform = cisco_ios
+    → ingest_snapshot(..., host_platforms={"R-EDGE-42": "cisco_ios"})
+  ```
+
+  ## Cost / when NOT to engage
+
+  - **Don't** call ``read_file`` for hosts where Python already returned
+    a platform.  Tier 1+2 wins outright — re-checking via LLM is waste.
+  - **Don't** retry the cascade on Tier 3 hosts.  If the cascade
+    couldn't classify, more attempts won't help; one LLM look is the
+    final call.
+  - **Don't** invent platform keys not in the table above — only the
+    7 listed are supported by ntc-templates today.

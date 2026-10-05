@@ -1,0 +1,104 @@
+schema_version: 1
+intent: sub_agent_dispatch
+agent: netops
+keywords:
+  - delegate
+  - sub-agent
+  - subagent
+  - which agent
+  - olav_delegate
+  - task tool
+  - capability routing
+  - hand off
+body: |
+  Delegation tool — preferred: ``task("<sub-agent-name>", "<request>")``.
+
+  ``olav_delegate(subagent_name=..., task_description=...)`` is a real
+  alternate path with the same semantics — use either.
+
+  ## Valid sub-agent names (free distribution)
+
+  - ``analyzer`` — **DEFAULT**.  SQL state + Markdown report writer
+    (6 tools: execute_sql / describe_table / query_evidence /
+    diff_configs / diff_snapshots / inspect_blast_radius / format_and_export).
+    Owns Workflow A (change plan → exports/change_plans/), Workflow D
+    (investigation report → exports/reports/), and L2 topology what-if
+    (inspect_blast_radius: graph topology — NOT Batfish control plane).
+    Delegates cross-domain to sim via native ``task()`` for config-layer
+    evaluation (dev_docs/77 §2.6).
+  - ``simulator`` — Batfish-backed config-layer evaluator (3 tools:
+    batfish_capability / batfish_q / format_and_export).  Answers
+    BGP/OSPF compatibility, reachability, route lookup, route-map
+    policy test, ACL search, differential reachability.  No SQL,
+    no logs, no live device access.  Replaced the deleted
+    R-CAB-THREE-STAGE Python pipeline on 2026-05-14 (dev_docs/77 §2).
+  - ``collector`` — data-plane probes, ``take_snapshot``.
+  - ``topology`` — discovery (BGP/OSPF/CDP/LLDP recipes → typed
+    TopologySnapshot).
+  - ``importer`` — offline snapshot ingest (bundle / rancid / vendor dump).
+  - ``learner`` — parser learning (/learn_cmd flow).
+
+  ## Enterprise-only sub-agents (require ``olav-ent`` install)
+
+  - ``lab`` — ContainerLab digital twin validator (currently
+    deferred, dev_docs/78).  In the free distribution this name
+    will return "sub-agent not found".
+
+  ## True hallucinations — these will fail
+
+  Names that have NEVER existed in this codebase:
+
+  - ❌ ``delegate_to(...)``
+  - ❌ ``sub_agent(...)``
+  - ❌ ``task("config-discovery", ...)``
+  - ❌ ``task("quick-query", ...)``
+
+  Stale names that NO LONGER exist (calling them will fail):
+
+  - ❌ ``analyze`` / ``ops-analyze`` — deleted 2026-05-19; its only
+    unique tool (inspect_blast_radius) is now in ``analyzer`` directly.
+  - ❌ ``investigate`` — deleted 2026-05-19; ``query_evidence`` is now
+    in ``analyzer`` directly (Workflow D handles log/syslog/fault search).
+  - ❌ ``explorer`` (via netops) — migrated 2026-05-19 to ``audit`` workspace.
+    Use ``olav --agent audit "explore"`` or ``task("explorer", ...)`` from audit.
+  - ❌ ``sim`` — renamed 2026-05-19 to ``simulator``; use that instead.
+  - ❌ ``ops-collect`` / ``collect`` — renamed 2026-05-19 to ``collector``.
+  - ❌ ``ingest`` — renamed 2026-05-19 to ``importer``.
+  - ❌ ``submit_draft`` / ``receive_rejection`` — were analyzer's
+    OLD tools when it owned DraftChangePlan; analyzer now writes
+    Markdown directly.
+  - ❌ ``finalize_tcf`` / ``rejection_sim`` — were sim's OLD
+    skill-script; sim is now a Batfish LLM sub-agent.
+
+  ## What to do when task() returns "sub-agent not found"
+
+  The second arg was wrong.  Pick from the valid list above; do NOT
+  retry with another made-up name.  If task() complains about the
+  name, try ``olav_delegate`` as the alternate path — same semantics,
+  different resolver.  If both fail, the capability genuinely
+  doesn't exist (e.g. ``lab`` in the free distribution); say so to
+  the user.
+
+  ## Capability-level routing
+
+  Don't reason about which TOOL to call — that's the sub-agent's
+  job.  Match user intent to capability:
+
+  | User intent | First call |
+  |---|---|
+  | DEFAULT — change plan / investigation / report / "why" / research / change request | task("analyzer", req) |
+  | Pure config-layer ("does ACL drop X", "is BGP config compatible", "what route for prefix P") | task("simulator", req) ← direct, skip analyzer hop |
+  | L2 topology what-if ("what if X fails", "blast radius of Y") | task("analyzer", req) — uses inspect_blast_radius |
+  | Topology diagram / Mermaid visualisation | task("analyzer", req) — format_and_export(format='mmd') |
+  | Why / log / syslog / fault log / evidence search | task("analyzer", req) — Workflow D, query_evidence |
+  | Ping / traceroute / live data-plane | task("collector", req) |
+  | Topology data discovery (LLDP/CDP) | task("topology", req) |
+  | Offline snapshot import (bundle/rancid/vendor dump) | task("importer", req) |
+  | Parser learning (/learn_cmd) | task("learner", req) |
+  | Open-ended exploration / find issues / no specific question | tell user: olav --agent audit "explore" |
+
+related:
+  - intent: plan_act_reflect_workflow
+    note: "analyzer's COLLECT_BROAD → PLAN → ACT → REFLECT → SYNTHESISE → EMIT skeleton"
+  - intent: batfish_question_catalog
+    note: "what sim can answer + per-question arg schema"

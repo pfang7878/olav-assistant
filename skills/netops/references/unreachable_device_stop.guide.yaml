@@ -1,0 +1,75 @@
+schema_version: 1
+intent: unreachable_device_stop
+agent: netops
+keywords:
+  - unreachable
+  - cannot connect
+  - connection failed
+  - TCP connection failed
+  - device offline
+  - SSH timeout
+  - device down
+  - device unreachable
+  - connection failed
+body: |
+  When a sub-agent reports a device is **unreachable** (TCP/SSH
+  failed, no response, transport error), STOP and report — do NOT
+  auto-investigate the cause unless the user explicitly asked.
+
+  ## Why this guide exists
+
+  Real example (in-vivo T13, 2026-05-10): user asked "ping R3 from
+  R1 and report connectivity". The collect sub-agent answered
+  correctly: "TCP connection to R1 failed". The orchestrator then
+  auto-dispatched task("analyzer") to find R1's outage cause,
+  ran multiple syslog queries, hit timeout. The user got a less
+  helpful response than the first answer would have been.
+
+  Helpful drift hurts when each extra step makes the response
+  slower without adding clarity for the original question.
+
+  ## When to apply this guide
+
+  Trigger conditions (ANY of):
+  - Sub-agent response mentions "unreachable", "TCP failed",
+    "connection refused", "timeout", "404 not found", "ICMP no reply"
+  - ``execute_cli_parallel`` returned ``status: error`` for the
+    target device
+  - inspect_devices returned ``unknown_devices: [name]``
+
+  ## What to do — STOP path
+
+  1. Report the unreachability concretely:
+     - Which device (hostname + management IP if known)
+     - When it was attempted
+     - The specific error category (TCP / SSH auth / timeout)
+  2. Suggest concrete next steps the human can take:
+     - "Check the management network or console access"
+     - "Verify device power / oncall escalation"
+     - "Re-run after reachability is restored"
+  3. END the run. Do NOT dispatch additional task() calls.
+
+  ## When the user EXPLICITLY asks to investigate
+
+  Trigger phrases that DO authorise auto-investigation:
+  - "investigate why X is down"
+  - "why is X unreachable"
+  - "find the cause of X's outage"
+  - "deep investigate"
+  - troubleshoot / fault localization
+
+  In those cases follow ``fault_analysis_workflow`` (separate guide)
+  — investigate logs, recent config changes, snapshots. Allow up to
+  ~10 tool calls before forced summary.
+
+  ## Distinguishing the two paths
+
+  | Prompt shape | Path |
+  |---|---|
+  | "ping X" / "is X up" / "show X status" | STOP on unreachable |
+  | "X is unreachable, find out why" | INVESTIGATE |
+  | "show me X's BGP" | STOP on unreachable |
+  | "X's BGP went down — investigate why" | INVESTIGATE |
+
+  When in doubt, STOP and ask the user "do you want me to investigate
+  the cause?" rather than presuming.

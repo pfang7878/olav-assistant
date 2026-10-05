@@ -1,0 +1,91 @@
+schema_version: 1
+intent: topology_query
+agent: netops
+keywords:
+  - topology
+  - adjacency
+  - adjacencies
+  - neighbor
+  - neighbors
+  - 1-hop
+  - 1-hop closure
+  - neighbor
+  - topology
+  - cdp
+  - lldp
+  - bgp neighbor
+  - ospf neighbor
+priority: 9
+body: |
+  # Topology / neighbor queries — 3 simple SQLs
+
+  When planning or auditing a change, you typically need neighbor
+  data across one or more layers.  Always run #1; add #2 / #3 if
+  the change touches that protocol.
+
+  ## 1. Physical adjacencies (CDP/LLDP) — REQUIRED for every change
+
+  ```python
+  execute_sql(sql="""
+      SELECT source_device, source_interface,
+             destination_device, destination_interface,
+             discovery_protocol, link_status
+      FROM netops.topology_links
+      WHERE snapshot_id = '<your snap_id>'
+        AND (source_device IN ('R3','R4')
+             OR destination_device IN ('R3','R4'))
+  """)
+  ```
+
+  Returns one row per CDP/LLDP-discovered link involving a scope
+  device.  This gives the 1-hop closure (R3's neighbors + R4's
+  neighbors), not just R3↔R4 itself.
+
+  ## 2. BGP sessions — required when change touches BGP / AS / peer
+
+  ```python
+  execute_sql(sql="""
+      SELECT device, neighbor, state, prefixes_received, remote_as
+      FROM netops.v_bgp_neighbors_auto
+      WHERE snapshot_id = '<your snap_id>'
+        AND device IN ('R3','R4')
+  """)
+  ```
+
+  ## 3. OSPF adjacencies — required when change touches OSPF / IGP underlay
+
+  ```python
+  execute_sql(sql="""
+      SELECT device, neighbor_id, state, interface_name
+      FROM netops.v_ospf_neighbors_auto
+      WHERE snapshot_id = '<your snap_id>'
+        AND device IN ('R3','R4')
+  """)
+  ```
+
+  ## DO NOT invent view names
+
+  Only these four sources exist for topology / neighbor data:
+
+  | Purpose | Source |
+  |---|---|
+  | Physical edges (CDP/LLDP) | ``netops.topology_links`` |
+  | Cleaned L2 topology view | ``netops.v_l2_links_auto`` |
+  | BGP sessions | ``netops.v_bgp_neighbors_auto`` |
+  | OSPF adjacencies | ``netops.v_ospf_neighbors_auto`` |
+
+  Hallucinated names that **do not exist** — never use:
+    - ``v_topology_l2_auto``  ← DOES NOT EXIST
+    - ``v_topo_links_clean``  ← DOES NOT EXIST
+    - ``v_topo_links``        ← DOES NOT EXIST
+    - ``v_device_neighbors_summary`` ← DOES NOT EXIST
+    - ``v_l2_topology_summary``      ← DOES NOT EXIST
+
+  If you're unsure which view exists, run
+  ``describe_table(table_name='netops.<name>')`` — it returns an
+  error if the name is invalid, which tells you to use a canonical
+  one instead of guessing.
+
+related:
+  - intent: change_plan_cli_authoring
+    note: "after fetching topology, build the Topology Context section"

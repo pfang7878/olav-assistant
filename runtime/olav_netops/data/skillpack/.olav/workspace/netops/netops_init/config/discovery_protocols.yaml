@@ -1,0 +1,63 @@
+# Discovery protocols — declare which neighbor-discovery protocols the
+# topology ETL should extract into ``netops.topology_links``. Adding a new
+# protocol (IS-IS, BFD, FabricPath, proprietary) requires only a YAML
+# entry — no Python changes.
+#
+# Schema per protocol:
+#   name                       Display name written to topology_links.discovery_protocol
+#   link_type                  L2 / L3 / overlay / other — stored in link_type column
+#   commands                   CLI commands that produce neighbor data in parsed_outputs
+#   local_interface_fields     Candidate keys for the local-side interface name
+#                              (ntc-templates varies in case/naming across versions)
+#   neighbor_device_fields     Candidate keys for the neighbor device name/ID
+#   neighbor_interface_fields  Candidate keys for the neighbor-side interface/port
+#   raw_fallback               (optional) "cdp" | "lldp" — use the built-in regex
+#                              parser when TextFSM/PaC didn't populate parsed_data
+
+protocols:
+  cdp:
+    name: CDP
+    link_type: L2
+    commands:
+      - show cdp neighbors detail
+      - show cdp neighbors
+    local_interface_fields: [local_interface, LOCAL_INTERFACE]
+    neighbor_device_fields: [NEIGHBOR_NAME, neighbor_name, NEIGHBOR, neighbor]
+    neighbor_interface_fields:
+      - NEIGHBOR_INTERFACE
+      - neighbor_interface
+      - NEIGHBOR_PORT_ID
+      - neighbor_port_id
+    raw_fallback: cdp
+
+  lldp:
+    name: LLDP
+    link_type: L2
+    commands:
+      - show lldp neighbors detail
+      - show lldp neighbors
+    local_interface_fields: [local_interface, LOCAL_INTERFACE]
+    neighbor_device_fields:
+      - NEIGHBOR_NAME
+      - neighbor_name
+      - NEIGHBOR
+      - neighbor
+      - system_name
+      - SYSTEM_NAME
+    neighbor_interface_fields:
+      - NEIGHBOR_INTERFACE
+      - neighbor_interface
+      - NEIGHBOR_PORT_ID
+      - neighbor_port_id
+      - port_id
+      - PORT_ID
+    raw_fallback: lldp
+
+  # Uncomment once lab has ISIS devices + recipe is defined.
+  # isis:
+  #   name: ISIS
+  #   link_type: L3
+  #   commands: [show isis adjacency, show isis neighbors]
+  #   local_interface_fields: [interface, local_interface, INTERFACE]
+  #   neighbor_device_fields: [system_id, neighbor, SYSTEM_ID]
+  #   neighbor_interface_fields: [interface, neighbor_interface]

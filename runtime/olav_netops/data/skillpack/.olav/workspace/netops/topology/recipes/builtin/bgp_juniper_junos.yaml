@@ -1,0 +1,10 @@
+# BGP neighbors — Juniper Junos. Source field names from ARCH-25 PaC-learned
+# parser (.olav/templates/parsers/*/juniper_junos/show_bgp_summary.py).
+- command: show bgp summary
+  concept: bgp_neighbors
+  vendor_hint: juniper_junos
+  field_mappings:
+    neighbor_ip: peer_ip
+    neighbor_as: peer_as
+    state: state
+    uptime: uptime

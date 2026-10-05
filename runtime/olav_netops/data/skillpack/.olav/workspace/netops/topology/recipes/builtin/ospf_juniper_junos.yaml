@@ -1,0 +1,11 @@
+# OSPF adjacencies — Juniper Junos. Field names align with ntc-templates
+# juniper_junos_show_ospf_neighbor.textfsm.
+- command: show ospf neighbor
+  concept: ospf_neighbors
+  vendor_hint: juniper_junos
+  field_mappings:
+    neighbor_id: neighbor_id
+    neighbor_ip: address
+    interface: interface
+    state: state
+    dead_time: dead_time

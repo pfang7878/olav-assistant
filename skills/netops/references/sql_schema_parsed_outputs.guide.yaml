@@ -1,0 +1,64 @@
+schema_version: 2
+intent: sql_schema_parsed_outputs
+agent: netops
+scope: netops
+source_tier: platform
+keywords:
+  - parsed_outputs
+  - 采集条数
+  - 采集了哪些命令
+  - show 命令输出
+  - raw_output
+  - 原始输出
+  - 解析结果
+  - which commands were collected
+  - per-command counts
+  - command coverage
+  - 快照里有哪些命令
+  - CLI 输出表
+body: |
+  ## netops.parsed_outputs — one row per (device, command, snapshot)
+
+  Parsed CLI captures. Every guide that mentions this table today says what it
+  is NOT for ("don't count devices out of it"); this one says what it IS for.
+
+  Columns — use these names exactly:
+
+      device_name       VARCHAR    hostname the command ran on
+      command           VARCHAR    the CLI command, e.g. 'show version'
+      parsed_data       JSON       structured result (TextFSM/genie output)
+      snapshot_id       VARCHAR    which collection run this belongs to
+      raw_output        VARCHAR    unparsed device text
+      raw_output_hash   VARCHAR    dedup key for identical captures
+      ingested_at       TIMESTAMP  when the row landed
+      platform          VARCHAR    driver platform, e.g. cisco_ios
+
+  Answers it is the right table for:
+
+      -- which commands were collected, and how much of each
+      SELECT command, count(*) AS n
+      FROM netops.parsed_outputs GROUP BY 1 ORDER BY n DESC LIMIT 5;
+
+      -- coverage of one command across the fleet
+      SELECT count(DISTINCT device_name) FROM netops.parsed_outputs
+      WHERE command = 'show version';
+
+      -- what a single device gave up in one snapshot
+      SELECT command, ingested_at FROM netops.parsed_outputs
+      WHERE device_name = '<host>' AND snapshot_id = '<snap>';
+
+  Boundaries — three tables get confused with each other:
+
+  - **Fleet size / platform mix** → `netops.devices`, one row per device.
+    `parsed_outputs` has many rows per device, so counting it counts captures,
+    not devices.
+  - **Live syslog** → `search_logs`, which reads the Parquet ingest.
+    `command = 'show logging'` rows here are point-in-time device-side buffers,
+    not the receiver's stream.
+  - **Structured facts already extracted** (interfaces, BGP, routes) → the
+    `v_*_auto` views, which are built from `parsed_data`. Reach for
+    `parsed_outputs` when you want the capture itself — what ran, when, on what,
+    and the raw text — rather than the facts parsed out of it.
+
+  `parsed_data` is JSON: query it with DuckDB's JSON operators
+  (`parsed_data -> '$[0].field'`), not by string-matching `raw_output`.

@@ -1,0 +1,76 @@
+schema_version: 1
+intent: bgp_path_selection_and_state_machine
+agent: netops
+# Moved out of the platform wheel 2026-08-05: this is network-domain
+# knowledge, and CLAUDE.md forbids olav core carrying it. Declared core
+# before, which after the scope fix would have hidden it from the netops
+# agent entirely (dev_docs/117).
+keywords:
+  - bgp
+  - bgp neighbor
+  - bgp peer
+  - best path
+  - path selection
+  - prefix
+  - as-path
+  - aspath
+  - local-pref
+  - localpref
+  - med
+  - origin
+  - active
+  - idle
+  - connect
+  - opensent
+  - openconfirm
+  - established
+  - bgp state
+  - bgp flap
+  - bgp down
+  - bgp攻击
+  - bgp 故障
+  - 路由
+  - 选路
+body: |
+  BGP — orchestrator-level state + path summary.  Use after L1-L4
+  ruled out (see ``troubleshoot_layered_l1_to_l4``).  Full algorithm
+  + analyser code: ``ops/analyze/references/ROUTING_EXPERT_GUIDE.md``.
+
+  States (>30s in Idle/Active = below BGP layer):
+    Idle        — not started OR no route to peer (L1/L3)
+    Active      — TCP 179 failing — wrong peer-IP / ACL / no route (L3)
+    Connect     — TCP SYN sent, awaiting SYN-ACK (firewall?)
+    OpenSent    — Open sent — check AS#, hold-time, caps (L7)
+    OpenConfirm — Open exchanged — transient
+    Established — ✅ healthy
+
+  Last-reset reasons (most useful single command):
+    Junos: ``show bgp neighbor <peer> | match "Last error"``
+    IOS:   ``show ip bgp neighbors <peer> | include Last reset``
+    "Hold timer expired" → keepalives lost (L1/L2 jitter)
+    "Bad authentication" → MD5 mismatch
+    "Capability mismatch" → 4-byte AS / AF negotiation
+    "Notification: cease" → peer admin cleared
+    "Link bandwidth changed" → interface flapped
+
+  Path selection (first DIFFERING attribute wins):
+    1. Weight (Cisco-only, local) — highest wins
+    2. Local Pref — highest (default 100)
+    3. Locally originated > learned
+    4. AS-path length — shortest
+    5. Origin — IGP > EGP > Incomplete
+    6. MED — lowest (same-AS only unless ``always-compare-med``)
+    7. eBGP > iBGP
+    8. IGP metric to next-hop
+    9. Oldest path
+    10. Lowest router-ID
+
+  Inspect best path: Junos ``show route <prefix> detail`` (Active tag) /
+  IOS ``show ip bgp <prefix>`` (``>`` marks best).
+
+  Gotchas:
+    * AS-path prepending — peer artificially lengthens to deflect
+    * iBGP next-hop unreachable — Junos ``show route hidden``;
+      IOS ``show ip bgp | include next-hop``
+    * MED only compares within same AS by default
+    * Hold-timer mismatch → flaps every (lower) hold-timer seconds

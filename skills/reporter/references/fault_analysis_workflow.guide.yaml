@@ -1,0 +1,57 @@
+schema_version: 1
+intent: fault_analysis_workflow
+agent: netops
+keywords:
+  - fault
+  - diagnose
+  - diagnosis
+  - root cause
+  - why is
+  - down
+  - flap
+  - 故障
+  - 为什么
+  - 定位
+  - troubleshoot
+  - issue
+  - problem with
+body: |
+  Fault analysis questions ("why is X down", "diagnose Y", "root cause",
+  "故障") follow this REQUIRED sequence:
+
+  1. **State check (analyze)** — `task("analyze", "current state of <devices>")`
+     Get hard evidence of what IS true now: BGP up/down, link status,
+     prefix counts.  Use inspect_routing, inspect_devices,
+     inspect_topology.
+
+  2. **Evidence search (investigate)** — `task("investigate", "syslog
+     mentioning <symptom> on <devices>")`
+     Get historical evidence: flaps, errors, config diffs.  Use
+     query_evidence with patterns like "BGP", "OSPF dead", "down",
+     "neighbor".
+
+  3. **Synthesize**: state your hypothesis with evidence_chain
+     pointers.  Format: "X is the cause because (state shows Y) AND
+     (syslog shows Z)."
+
+  ## Common fault signatures
+
+  - **BGP "Established but Empty"** (session up, 0 prefixes received)
+    → likely inbound route-map / prefix-list / peer not advertising.
+    inspect_routing returns this directly via prefixes_received field.
+  - **Adjacency flap** → inspect_drift_routing shows state changes;
+    query_evidence(syslog, pattern="ADJCHANGE") lists timing.
+  - **Silent unreachable** → inspect_blast_radius confirms graph
+    state but live ping requires task("collect").
+
+  ## Anti-pattern: jumping to live CLI before exhausting DB
+
+  Don't `execute_cli_parallel` until inspect_routing + query_evidence
+  have been tried.  DB queries are zero-latency; SSH attempts are
+  slow and may fail with "device unreachable" wasting context.
+
+related:
+  - intent: compound_chain_workflow
+    note: "if user said 'diagnose then fix', after step 3 invoke task('sim')"
+  - intent: log_search
+    note: "investigate sub-agent's primary capability"

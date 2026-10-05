@@ -1,0 +1,178 @@
+schema_version: 1
+intent: change_plan_cli_authoring
+agent: netops
+keywords:
+  - prod CLI
+  - implementation CLI
+  - rollback CLI
+  - cli completeness
+  - configure terminal
+  - commit
+  - write memory
+  - write change plan
+  - prod CLI completeness
+  - redundant
+  - redundancy
+  - decommission
+  - failover
+priority: 5
+body: |
+  # Prod CLI authoring — hard rules
+
+  Every change plan's `cli_per_device` and `rollback_per_device` MUST
+  emit COMPLETE production CLI — including config-mode entry and
+  commit/save commands. Naked `set ...` (Junos) or `router ospf 1` (IOS)
+  without the wrapping commands is an **invalid draft**: the lab
+  translator can fill it in, but operators in HITL mode (no digital
+  twin) execute the CLI verbatim — missing `commit` = no-op on prod.
+
+  ## Junos (juniper_junos)
+
+  Implementation MUST start with `configure` and end with
+  `commit and-quit` (or `commit` then `exit`):
+
+      configure
+      set protocols ospf area 0.0.0.0 interface ge-0/0/2
+      commit and-quit
+
+  Rollback MUST also wrap:
+
+      configure
+      delete protocols ospf area 0.0.0.0 interface ge-0/0/2
+      commit and-quit
+
+  Junos doesn't have a separate "write memory" — `commit` already
+  persists. `commit and-quit` returns to operational mode in one step.
+
+  ## Cisco IOS / IOS-XE / IOS-XR
+
+  Implementation MUST start with `configure terminal`, end with `end`
+  then `write memory` (or `copy running-config startup-config`):
+
+      configure terminal
+      router ospf 1
+       network 192.0.2.0 0.0.0.255 area 0
+      end
+      write memory
+
+  Interface-mode subcommands need the interface command first:
+
+      configure terminal
+      interface Ethernet0/0
+       ip ospf 1 area 0
+       no shutdown
+      end
+      write memory
+
+  Rollback follows the same wrapper:
+
+      configure terminal
+      interface Ethernet0/0
+       no ip ospf 1 area 0
+      end
+      no router ospf 1     ← optional, only if no other interfaces use it
+      configure terminal
+      end
+      write memory
+
+  Notes:
+   - Use `end` (not `exit`) to return to enable mode in one step
+   - `write memory` is the persistence command; `copy run start` is equivalent
+
+  ## SR Linux (Nokia, in case prod uses SRL natively)
+
+  SRL uses `enter candidate` mode and `commit save`:
+
+      enter candidate
+      set / network-instance default protocols ospf instance 1 admin-state enable
+      set / network-instance default protocols ospf instance 1 version ospf-v2
+      commit save
+
+  SRL OSPF MUST include `version ospf-v2` (YANG strict) and for 2-node
+  links MUST include `interface-type point-to-point` (otherwise DR
+  election stalls adjacency at `two-way`).
+
+  ## Cross-vendor — Arista EOS / Cumulus / FortiOS
+
+  Add new vendor sections here when needed. Pattern: identify
+  config-mode entry command, identify persist/commit command.
+
+  ## Rollback completeness rule
+
+  For every `set <X>` (junos) or non-`show` line (cisco) in
+  implementation, rollback MUST have a corresponding `delete <X>` or
+  `no <X>`. Asymmetric rollback is a **change plan defect**.
+
+  Example WRONG rollback:
+      impl:    set protocols ospf area 0.0.0.0 interface ge-0/0/2
+      rollback: (empty)              ← cannot undo the change
+
+  Example RIGHT rollback:
+      impl:    set protocols ospf area 0.0.0.0 interface ge-0/0/2
+      rollback: delete protocols ospf area 0.0.0.0 interface ge-0/0/2
+
+  ## post_check expected_pattern catalog
+
+  Use these substrings/regexes as `expected_pattern` values for
+  common verifications. **MUST be non-empty** — empty pattern
+  matches any output → false-positive PASS.
+
+  | Verification                       | command                              | expected_pattern  |
+  |---|---|---|
+  | OSPF FULL adjacency (Cisco IOS)    | `show ip ospf neighbor`              | `FULL`            |
+  | OSPF Full adjacency (Junos)        | `show ospf neighbor`                 | `Full`            |
+  | OSPF Full adjacency (SRL)          | `show network-instance default protocols ospf neighbor` | `full` |
+  | BGP Established (Cisco)            | `show ip bgp summary`                | `Established`     |
+  | BGP Established (Junos)            | `show bgp summary`                   | `Establ`          |
+  | Static route in RIB                | `show ip route <prefix>`             | `<prefix>` e.g. `192.0.2.0/24` |
+  | Interface UP/UP (Cisco)            | `show interface <intf> status`       | `up.*up` regex    |
+  | Interface UP (Junos)               | `show interfaces <intf> terse`       | ` up    up`       |
+  | Interface description set          | `show running-config interface <X>`  | The exact description string |
+  | MTU set to 9000                    | `show interface <X>`                 | `MTU 9000`        |
+
+  When the canonical command isn't in this catalog, choose a substring
+  that ONLY appears in the post-change output. Avoid generic strings
+  like `up` or `0` that match unrelated lines.
+
+  ## Redundancy / decommission plans — quantify the impact FIRST
+
+  A Summary that says "increase availability" without a number is an
+  opinion. Before writing a redundancy / decommission / failover-class
+  plan, make ONE call to quantify what fails today if the element the
+  change protects (or removes) goes down:
+
+      execute_skill_script(
+          skill_name="analyzer",
+          script_name="inspect_blast_radius.py",
+          args={"remove_devices": ["<device_fqdn>"]},
+      )
+      # link change: args={"remove_links": [["<device_A>", "<device_B>"]]}
+
+  Cite the `isolated_nodes` count in BOTH Summary and Risks, e.g.:
+  "Today a failure of alpha-border-4500x isolates 9 devices; this change
+  removes that single point of failure." ONE call only; non-empty
+  `validation_warnings` means the scenario wasn't simulated (bad name) —
+  fix the name, don't treat it as no impact. Ordinary config changes
+  skip this entirely.
+
+  ## Common authoring mistakes — DO NOT do these
+
+  1. **Field name typos**: `expected` ← canonical is `expected_pattern`.
+     `cmd` ← canonical is `command`. Schema is strict.
+  2. **Empty `expected_pattern: ""`**: always matches → false PASS.
+  3. **Naked `set ...` without `configure`**: junos no-op.
+  4. **Missing `write memory`** (Cisco): config in RAM, lost on reload.
+  5. **Rollback omits config-mode wrapper**: rollback won't actually run.
+  6. **post_check.device not in `devices_in_scope`**: lab refuses.
+  7. **Using prod IP/subnet in CLI**: correct, and required. Write the CLI
+     against production addresses. The twin builder slices the device's own
+     running-config and records a prod↔lab interface bijection, so the lab
+     rewrites names for you (dev_docs/112 §6.2); nothing translates your
+     config any more. In analyzer-only mode (no digital twin) the CLI runs
+     verbatim on prod, which is the same text.
+
+related:
+  - intent: change_plan_emit_tcf
+    note: "main change-plan workflow guide; this one is the authoring rules"
+  - intent: freeform_cli_change
+    note: "intent-selection workflow; this one is post-selection CLI rules"

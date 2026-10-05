@@ -1,0 +1,128 @@
+schema_version: 1
+intent: discover_routing_config_via_sql
+agent: netops
+keywords:
+  - routing protocol
+  - ospf process
+  - eigrp as
+  - bgp asn
+  - router ospf
+  - router eigrp
+  - which routing protocol
+  - what routing protocol do they run
+  - what protocol does this device run
+  - identify routing protocol
+  - running-config routing
+  - change plan routing context
+  - what protocol is configured
+  - no eigrp neighbor view
+  - neighbor state vs protocol
+priority: 6
+body: |
+  # Discover routing config with ONE regexp SQL — never dump raw config
+
+  Change plans that touch routing must match what is **actually configured**
+  (OSPF process, EIGRP AS, BGP ASN, area, network statements). That config
+  lives ONLY in `netops.raw_output_store` (the `show running-config` text) —
+  there is **no structured view** for it. The failure mode this guide exists
+  to kill: an agent that pulls the whole 70 KB config with
+  `substr(raw_output, 1, 30000)` into context, cannot find what it wants,
+  and loops forever on bigger/different substrings — hallucinating a value in
+  the end. The correct move is to let DuckDB extract the exact fact and return
+  a handful of characters.
+
+  ## Rule 0b — neighbor-STATE views are NOT "what protocol runs"
+
+  To answer *"what routing protocol does device X run?"* regexp its
+  running-config (Rule 0 below). Do **NOT** infer it from
+  `v_bgp_neighbors_auto` / `v_show_ip_ospf_neighbor_auto` — those show
+  adjacency **state**, and they mislead badly:
+    * There is **no EIGRP neighbor view at all** — an EIGRP box shows up as
+      "no neighbors" in the BGP/OSPF views.
+    * A pair of devices that isn't cabled yet (e.g. the two ends of a planned
+      new uplink) has **no adjacency between them** regardless of protocol.
+  Concluding "no routing protocol" from empty neighbor-state views is a
+  classic wrong answer — the device may well run `router eigrp 1`. The config
+  is ground truth; neighbor state is not.
+
+  ## Rule 0 — NEVER ASSUME the protocol. Discover it first.
+
+  Do not trust the protocol named in the request. A request may say "OSPF
+  uplink" on a network that actually runs **EIGRP** or static routes. Writing
+  `router ospf 1` on an EIGRP box is a network-breaking hallucination. So the
+  FIRST routing query is always: *what is this device actually running?*
+
+  ```sql
+  -- What routing protocol + process/AS does each endpoint actually run?
+  SELECT device_name,
+         regexp_extract(raw_output, '(?m)^router (ospf|eigrp|bgp) (\d+)', 0) AS routing
+  FROM netops.raw_output_store
+  WHERE command = 'show running-config'
+    AND device_name IN ('<A>', '<B>');
+  -- → e.g. 'router eigrp 1'  (14 chars, not the 70 KB config)
+  ```
+
+  If the result is empty, the device has no dynamic routing configured (check
+  `ip route ` for static). If the request's protocol ≠ what you found, plan for
+  what is **actually running**, and say so in the Summary ("request said OSPF;
+  alpha-as1 runs EIGRP 1 — plan targets EIGRP").
+
+  ## Rule 1 — extract the exact fields you need, each in one regexp
+
+  ```sql
+  -- OSPF process id + a network/area sample (only if OSPF is present)
+  SELECT device_name,
+         regexp_extract(raw_output, '(?m)^router ospf (\d+)', 1)               AS ospf_process,
+         regexp_extract(raw_output, 'network (\S+ \S+ area \d+)', 1)           AS ospf_net_sample
+  FROM netops.raw_output_store
+  WHERE command='show running-config' AND device_name='<A>';
+
+  -- EIGRP AS + a network sample
+  SELECT regexp_extract(raw_output, '(?m)^router eigrp (\d+)', 1)              AS eigrp_as,
+         regexp_extract(raw_output, '(?m)^ network (\S+)', 1)                   AS eigrp_net
+  FROM netops.raw_output_store
+  WHERE command='show running-config' AND device_name='<A>';
+
+  -- BGP ASN
+  SELECT regexp_extract(raw_output, '(?m)^router bgp (\d+)', 1)                AS local_asn
+  FROM netops.raw_output_store
+  WHERE command='show running-config' AND device_name='<A>';
+  ```
+
+  Each returns a few characters. That is the whole point.
+
+  ## Rule 1b — to MIRROR an existing block, grab the LINES in ONE query
+
+  When a change must copy an existing config's style (e.g. "add a BGP neighbour
+  like the current one"), you need to SEE those lines — get them all in ONE
+  query with `regexp_extract_all`, which returns a compact list. Do this ONCE.
+
+  ```sql
+  -- All BGP neighbour lines (copy a peer's style) — ONE query, ~15 lines:
+  SELECT regexp_extract_all(raw_output, '(?m)^ *neighbor \S.*') AS neighbor_lines
+  FROM netops.raw_output_store WHERE command='show running-config' AND device_name='<A>';
+  -- → ['neighbor 10.112.177.205 remote-as 7575',
+  --    'neighbor 10.112.177.205 description AARNet4 …',
+  --    'neighbor 10.112.177.205 timers 10 20', …]
+  ```
+
+  Two anti-patterns that both loop to timeout (proven on gemma4-31b):
+  * **Field-by-field**: dozens of `regexp_extract('(?m)^ …')`, one per line —
+    that is the raw-dump rabbit hole in slow motion (124 calls, never finished).
+  * **Whole block**: `regexp_extract(…, '…router bgp.*', 0)` — a `router bgp`
+    block with address-families is tens of KB; it just hits the cell cap.
+  ONE `regexp_extract_all` of the specific lines (neighbours, `network`
+  statements, a route-map) is the sweet spot. NOTE: DuckDB uses RE2 — **no
+  lookahead** (`(?=…)` errors); match line patterns, not block boundaries.
+
+  ## Rule 2 — HARD LIMIT on raw_output
+
+  * Query `netops.raw_output_store` **at most twice**, and **only** through
+    `regexp_extract` / `regexp_matches` that return a specific field.
+  * **NEVER** `SELECT raw_output`, `SELECT *`, `substr(raw_output, …)`,
+    `length(raw_output)`, or otherwise pull whole config text into the answer.
+    A 30 KB config in context is what makes you hallucinate and loop.
+  * If a regexp returns empty, the fact is not configured — **do not keep
+    trying different substrings**. State the assumption in the plan's Risks
+    section and move on. A stated assumption is a correct deliverable; an
+    endless search is a timeout.

@@ -1,0 +1,65 @@
+schema_version: 2
+intent: sql_schema_interface_views
+agent: netops
+source_tier: platform
+keywords:
+- interface
+- interfaces
+- show interfaces
+- show ip interface
+- interface down
+- interface up
+- link state
+- admin state
+- shutdown
+- no shutdown
+- shut
+- admin down
+- line protocol
+body: |
+  ## OLAV interface view schemas
+
+  Two views, similar but different field set — pick the one that
+  matches your platform's command.
+
+  ### `netops.v_show_interfaces_terse_auto`  — Junos `show interfaces terse`
+  ```
+  device_name, snapshot_id, interface, admin_state, link_state,
+  proto, ip_address, remote
+  ```
+  - `admin_state`: `up` / `down` (operator-driven)
+  - `link_state`: `up` / `down` (physical/protocol)
+  - **"Interface down" almost always means `link_state = 'down'`.**
+
+  ### `netops.v_show_ip_interface_brief_auto`  — IOS `show ip int brief`
+  ```
+  device_name, snapshot_id, interface, ip_address, status, proto
+  ```
+  - `status`: line status (`up` / `down` / `administratively down`)
+  - `proto`: protocol status (`up` / `down`)
+
+  ## Example queries
+
+  ```sql
+  -- Interfaces down on R3 (covers both platform conventions)
+  SELECT device_name, interface, admin_state, link_state, ip_address
+  FROM netops.v_show_interfaces_terse_auto
+  WHERE device_name = 'R3' AND link_state = 'down'
+  UNION ALL
+  SELECT device_name, interface, status AS admin_state, proto AS link_state,
+         ip_address
+  FROM netops.v_show_ip_interface_brief_auto
+  WHERE device_name = 'R3' AND (status = 'down' OR proto = 'down');
+
+  -- All admin-down interfaces (someone shut them)
+  SELECT device_name, interface
+  FROM netops.v_show_interfaces_terse_auto
+  WHERE admin_state = 'down';
+  ```
+
+  ## Common mistakes
+
+  - `SELECT status FROM v_show_interfaces_terse_auto` — column is
+    `link_state` (+ `admin_state`), no `status`.
+  - `WHERE down = ...` — values are strings `'up'` / `'down'` (lowercase).
+  - Forgetting `netops.` prefix.

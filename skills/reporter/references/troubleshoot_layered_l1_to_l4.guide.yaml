@@ -1,0 +1,74 @@
+schema_version: 1
+intent: troubleshoot_layered_l1_to_l4_protocol_agnostic
+agent: netops
+# 2026-08-05: was declared core while being network-domain knowledge.
+# After the scope fix that would have hidden it from the netops agent
+# and exposed it to core instead (dev_docs/117).
+keywords:
+  - troubleshoot
+  - troubleshooting
+  - diagnose
+  - diagnosis
+  - debug
+  - investigate
+  - root cause
+  - root-cause
+  - fault
+  - down
+  - flapping
+  - flap
+  - stuck
+  - hanging
+  - failing
+  - unreachable
+  - timeout
+  - layer
+  - L1
+  - L2
+  - L3
+  - L4
+  - physical
+  - link
+  - interface
+  - tcp
+  - udp
+  - port
+  - bgp
+  - ospf
+  - eigrp
+  - bfd
+  - lldp
+  - ldp
+  - mpls
+  - vrrp
+  - 排查
+  - 故障
+  - 诊断
+  - 调试
+  - 找原因
+  - 根因
+  - 不通
+  - 不可达
+  - 链路
+  - 接口
+  - 物理
+body: |
+  ACTION: when user reports a stuck protocol session, FIRST emit a
+  tool_call to gather L1 evidence (do NOT inline-recite procedures).
+
+  State → tool to call FIRST:
+
+  | State | First tool call |
+  |---|---|
+  | BGP ``Idle`` | ``execute_sql SELECT * FROM netops.v_show_interfaces_terse_auto WHERE device_name='<host>'`` |
+  | BGP ``Active`` | ``execute_sql SELECT * FROM netops.v_show_ip_route_auto WHERE device_name='<host>' AND destination LIKE '<peer>%'`` |
+  | BGP ``Connect`` | ``execute_cli device='<host>' command='show system connections | match :179'`` |
+  | BGP ``OpenSent`` | ``execute_cli device='<host>' command='show ip bgp neighbors <peer> | include reset'`` |
+  | OSPF ``Init`` / ``ExStart`` | ``execute_sql SELECT * FROM netops.v_show_interfaces_terse_auto WHERE device_name='<host>'`` (then check MTU + area) |
+  | BFD ``Down`` | ``execute_sql SELECT * FROM netops.v_show_interfaces_terse_auto`` for both endpoints |
+
+  After SQL, if interface is ``up``, then move to L3 (route to peer)
+  / L4 (TCP/UDP).  Only descend to L7 protocol attributes after L1-L4 clean.
+
+  Deeper detail: ``bgp_path_selection_and_state_machine`` guide.
+        in ``ops/analyze/references/ROUTING_EXPERT_GUIDE.md``.

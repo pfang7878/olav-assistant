@@ -1,0 +1,29 @@
+# Cron schedule configuration for olav scheduled tasks.
+# Apply with: olav --agent config --auto-approve "apply cron schedules"
+#
+# All jobs call: olav --agent <agent> --auto-approve "<instruction>"
+
+schedules:
+  snapshot:
+    cron: "0 2 * * *"
+    agent: config
+    instruction: "take snapshot"
+    description: "Daily network snapshot — SSH collect + parse + diff all devices"
+
+  trace_learner:
+    cron: "0 3 * * *"
+    agent: config
+    instruction: "run trace learner"
+    description: "Learn from network traces and update command template registry"
+
+  audit_weekly:
+    cron: "0 6 * * 1"
+    agent: audit
+    instruction: "generate weekly compliance report"
+    description: "Weekly audit — BGP health, config drift, compliance check"
+
+  reflect:
+    cron: "0 4 * * *"
+    agent: admin
+    instruction: "reflect on today's errors, on what recall failed to answer, and on knowledge base health, then propose improvements"
+    description: "Daily self-improvement — admin/reflector reads two bounded histograms: the error signatures (audit.duckdb + logs) and the recall outcomes (questions recall answered badly or not at all). Writes reflection lessons / guide drafts, and drafts code-fix proposals (never applies). One job rather than two: the inference endpoint saturates at concurrency 1, so a second daily agent run costs a full turn for the same class of signal. Runs after trace_learner (3am)."

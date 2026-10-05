@@ -1,0 +1,10 @@
+# OSPF adjacencies — Arista EOS.
+- command: show ip ospf neighbor
+  concept: ospf_neighbors
+  vendor_hint: arista_eos
+  field_mappings:
+    neighbor_id: neighbor_id
+    neighbor_ip: address
+    interface: interface
+    state: state
+    dead_time: dead_time

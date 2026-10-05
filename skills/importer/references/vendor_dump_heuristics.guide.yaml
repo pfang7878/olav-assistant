@@ -1,0 +1,81 @@
+schema_version: 1
+intent: vendor_dump_heuristics
+agent: netops
+keywords:
+  - vendor dump
+  - show tech-support
+  - junos commit-archive
+  - loose dump
+  - format detection
+  - vendor
+  - loose text dump
+priority: 3
+body: |
+  ## Vendor-dump format heuristics
+
+  When the input is NOT a canonical OLAV bundle (no `manifest.yaml`),
+  these patterns help classify what you're looking at — but **only the
+  canonical bundle is supported by `ingest_snapshot` in the current
+  release**. For other layouts, report what you see and stop.
+
+  ## How to identify in-the-wild formats
+
+  ### Cisco IOS / IOS-XE `show tech-support`
+  Single file, very large (often >5 MB), contains banner sections like::
+
+      ------------------ show version ------------------
+      Cisco IOS XE Software, Version 17.01.01
+      ...
+      ------------------ show running-config ------------------
+      Building configuration...
+      ...
+
+  Split key: lines matching `^-+\s+show\s+.*-+$`.
+
+  ### Cisco IOS-XR `show tech-support`
+  Same idea but the section banner is::
+
+      ##################### show <command> #####################
+
+  ### Junos commit-archive
+  Filename: `juniper-N-YYYYMMDD-HHMMSS.txt`. Each file is one
+  hierarchical config snapshot at commit time. Header line::
+
+      ## Last commit: 2026-05-15 11:08:42 UTC by jchen via cli
+
+  ### Junos `request support information`
+  Tarball (`.tgz`) containing `re0/`, `re1/` subdirs with per-RE
+  outputs. Inside each, files named after the source command with
+  spaces replaced by dots: `show.version.txt`.
+
+  ### Arista EOS `show tech-support`
+  Plain text, very long, sections delimited by::
+
+      ----- show <command> -----
+
+  ### Nokia SR OS `admin show tech`
+  Tarball; per-card subdirs named `bof.cfg`, `config.cfg`, etc.
+
+  ### Huawei `display diagnostic-information`
+  Single file, sections separated by lines starting with
+  `=====================================`.
+
+  ## What to do when you see these
+
+  None of the above are accepted by `ingest_snapshot` in this release.
+  Report to the user:
+
+      Format detected: <Cisco show-tech | Junos commit-archive | ...>
+      This format is not yet supported.
+      Supported formats today:
+        - Canonical OLAV bundle (manifest.yaml + devices/<host>/...)
+      To ingest this data, ask the operator to either:
+        (a) re-collect via `olav-collect` (when available), or
+        (b) repackage by hand using scripts/build_portable_ingest_fixture.py
+            as a starting template.
+
+  ## Ambiguity → HITL
+
+  If the input has MIXED formats (e.g. 2 canonical bundle hosts + 3
+  loose dumps in the same directory), **do not try to merge**. List
+  what you see, name the conflict, and ask the user how to proceed.

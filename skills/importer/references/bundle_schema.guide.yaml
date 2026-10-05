@@ -1,0 +1,105 @@
+schema_version: 1
+intent: portable_bundle_schema
+agent: netops
+keywords:
+  - bundle
+  - manifest.yaml
+  - portable snapshot
+  - ingest schema
+  - _meta.yaml
+  - content_sha256
+  - offline bundle
+  - snapshot bundle
+  - import
+priority: 5
+body: |
+  ## Canonical bundle layout (dev_docs/80 §3)
+
+  A portable snapshot bundle is either a directory or a zip file with
+  this layout:
+
+      <root>/
+      ├── manifest.yaml                           (required)
+      ├── devices/                                (required)
+      │   ├── <hostname>/
+      │   │   ├── _meta.yaml                      (required per host)
+      │   │   ├── <safe_command_name>.txt         (one per command)
+      │   │   └── ...
+      └── audit.log                               (optional)
+
+  ## manifest.yaml shape
+
+  ```yaml
+  schema_version: 1
+  collector:
+    name: olav-collector            # or 'rancid', 'manual', '<vendor>-tech'
+    version: 0.1.0
+    invocation: "olav-collect run --inventory hosts.yml --out x.zip"
+  collected_at: 2026-05-15T11:08:42Z
+  collected_by: jchen@jumphost-tor1
+  workspace_id: site-tor1
+  hosts_collected: 6
+  hosts_failed: 0
+  redaction:
+    pre_scrubbed: true              # or false; ingest re-scrubs either way
+    salt_fingerprint: a3f2c891      # first 8 hex of sha256(salt)
+    netconan_version: 0.13.0
+  content_sha256: <64-hex>          # sha256 over devices/*/*.txt bytes
+  signature: null                   # reserved for GPG (Phase 6+)
+  ```
+
+  Required fields: `schema_version`, `collector.name`,
+  `collector.version`, `hosts_collected`, `redaction.pre_scrubbed`,
+  `content_sha256`. Anything else is optional.
+
+  ## _meta.yaml shape (per host)
+
+  ```yaml
+  hostname: R2
+  mgmt_ip: 10.10.0.2
+  platform: cisco_ios               # nornir-canonical platform key
+  vendor: Cisco
+  os_version: "15.6(3)M5"           # optional
+  model: "Cisco 2911"               # optional
+  commands_attempted: 14
+  commands_succeeded: 14
+  commands_failed: 0
+  collected_at: 2026-05-15T11:08:42Z
+  ```
+
+  Required: `hostname`, `mgmt_ip`, `platform`, `vendor`.
+
+  ## Per-command file (`devices/<host>/<safe_command>.txt`)
+
+  Filename uses underscores for spaces (`show_ip_bgp_summary.txt`).
+  File starts with optional 2-3 header lines:
+
+      # command: show ip bgp summary
+      # collected_at: 2026-05-15T11:08:42Z
+      # pre_scrubbed: true
+
+      BGP router identifier 2.2.2.2, local AS 65001
+      ...
+
+  Header is optional but recommended; if absent, the ingest reader
+  recovers the command name from the safe filename via a known
+  `_SAFE_TO_CMD_DEFAULTS` map (falls back to `s/_/ /`).
+
+  ## Content hash semantics
+
+  `content_sha256` is computed over the concatenated bytes of every
+  `devices/<host>/<cmd>.txt` file, in **sorted order**:
+
+  1. Sort hosts ascending by directory name
+  2. Within each host, sort files ascending by filename
+  3. Read full file contents (header included)
+  4. Append to a single sha256 stream
+  5. Hex-encode the digest
+
+  Validation refuses the bundle on hash mismatch.
+
+  ## Workflow with the bundle
+
+  1. `validate_bundle(<path>)` — cheap pre-flight, no DB writes
+  2. If `ok=True`: `ingest_snapshot(<path>, collection_source=...)`
+  3. `bundle_ingests` row is written with full provenance

@@ -1,0 +1,57 @@
+schema_version: 2
+intent: sql_schema_route_views
+agent: netops
+source_tier: platform
+keywords:
+- route
+- routes
+- routing
+- routing table
+- prefix
+- next hop
+- nexthop
+- show ip route
+- show route
+- static
+- connected
+- rib
+body: |
+  ## OLAV routing-table view schema
+
+  ### `netops.v_show_ip_route_auto`
+  ```
+  device_name, snapshot_id, vrf, protocol, type, network, prefix_length,
+  distance, metric, nexthop_ip, nexthop_vrf, nexthop_if, uptime, flag
+  ```
+  - `network` is the prefix WITHOUT mask; `prefix_length` is the mask
+    (e.g. `network='10.0.0.0'`, `prefix_length=24` → `10.0.0.0/24`)
+  - `protocol` examples: `BGP`, `OSPF`, `STATIC`, `Connected`, `Local`
+  - `nexthop_if` = outgoing interface (e.g. `Ethernet0/0`)
+
+  ## Example queries
+
+  ```sql
+  -- Routes on R3
+  SELECT network || '/' || prefix_length AS prefix,
+         protocol, nexthop_ip, nexthop_if, metric
+  FROM netops.v_show_ip_route_auto
+  WHERE device_name = 'R3'
+  ORDER BY protocol, network;
+
+  -- All BGP-learned routes cross-device
+  SELECT device_name, network || '/' || prefix_length AS prefix,
+         nexthop_ip
+  FROM netops.v_show_ip_route_auto
+  WHERE protocol = 'BGP';
+
+  -- Default routes
+  SELECT device_name, nexthop_ip, protocol
+  FROM netops.v_show_ip_route_auto
+  WHERE network = '0.0.0.0' AND prefix_length = 0;
+  ```
+
+  ## Common mistakes
+
+  - `SELECT destination FROM v_show_ip_route_auto` — column is `network`.
+  - `SELECT mask FROM ...` — column is `prefix_length` (integer).
+  - `SELECT next_hop FROM ...` — column is `nexthop_ip`.

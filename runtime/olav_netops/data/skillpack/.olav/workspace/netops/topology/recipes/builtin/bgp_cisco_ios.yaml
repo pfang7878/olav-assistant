@@ -1,0 +1,35 @@
+# BGP neighbors — Cisco IOS / IOS-XE (ntc-templates lowercase schema).
+# Shipped built-in. Do not edit — user overrides go under
+# ~/.olav/config/recipes/user/bgp_cisco_ios.yaml.
+- command: show bgp summary
+  concept: bgp_neighbors
+  vendor_hint: cisco_ios
+  field_mappings:
+    neighbor_ip: neighbor_ip
+    neighbor_as: neighbor_as
+    local_as: local_as
+    router_id: router_id
+    state: state_pfxrcd
+    uptime: up_down
+
+- command: show ip bgp summary
+  concept: bgp_neighbors
+  vendor_hint: cisco_ios
+  field_mappings:
+    neighbor_ip: neighbor_ip
+    neighbor_as: neighbor_as
+    local_as: local_as
+    router_id: router_id
+    state: state_pfxrcd
+    uptime: up_down
+
+- command: show bgp all summary
+  concept: bgp_neighbors
+  vendor_hint: cisco_ios
+  field_mappings:
+    neighbor_ip: neighbor_ip
+    neighbor_as: neighbor_as
+    local_as: local_as
+    router_id: router_id
+    state: state_pfxrcd
+    uptime: up_down
